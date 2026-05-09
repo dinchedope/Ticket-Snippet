@@ -15,7 +15,7 @@
         <textarea
             v-model="value"
             rows="4"
-        />
+        ></textarea>
     </div>
 </template>
 

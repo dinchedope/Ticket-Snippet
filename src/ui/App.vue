@@ -11,6 +11,7 @@
   import TimeTracking from './Components/Time-tracking.vue';
   import { fetchCreateMeta, createIssue, type JiraConfig } from './services/jiraApi'
   import { serializeForm } from './services/serializeForm'
+  import { parseTsvData, applyConfigToForm, type Config } from './services/configMapping'
 
   interface JiraIssue {
     fields: any[];
@@ -38,6 +39,8 @@
   const token = persisted('token');
   const request_link = persisted('request_link');
   const baseUrl = persisted('baseUrl');
+  const pastedData = persisted('pastedData');
+  const configJson = persisted('configJson');
 
   function jiraConfig(): JiraConfig {
     return { baseUrl: baseUrl.value, email: login.value, apiToken: token.value };
@@ -69,6 +72,27 @@
       status.value = { kind: 'ok', message: `Создан: ${created.key}` };
     } catch (e: any) {
       status.value = { kind: 'error', message: e.message ?? String(e) };
+    }
+  }
+
+  function applyConfig() {
+    try {
+      const parsed = parseTsvData(pastedData.value);
+      const config: Config = configJson.value.trim()
+        ? JSON.parse(configJson.value)
+        : {};
+      console.log('[applyConfig] parsed TSV:', parsed);
+      console.log('[applyConfig] config:', config);
+      form.value = applyConfigToForm(
+        form.value,
+        config,
+        parsed,
+        jiraScheme.value.fields ?? []
+      );
+      console.log('[applyConfig] form after:', form.value);
+      status.value = { kind: 'ok', message: 'Конфиг применён' };
+    } catch (e: any) {
+      status.value = { kind: 'error', message: 'Ошибка конфига: ' + (e.message ?? String(e)) };
     }
   }
 
@@ -129,6 +153,10 @@
       }
       return field.defaultValue
     }
+    if (Array.isArray(field.allowedValues) && field.allowedValues.length === 1) {
+      const only = field.allowedValues[0]
+      return String(only.id ?? only.value ?? '')
+    }
     const schema = field.schema
     if (schema?.type === 'array') return []
     if (schema?.type === 'timetracking') return {}
@@ -143,11 +171,15 @@
 
 
   onMounted(async () => {
-    const data = await chrome.storage.local.get(['login', 'token', 'request_link', 'baseUrl']);
+    const data = await chrome.storage.local.get([
+      'login', 'token', 'request_link', 'baseUrl', 'pastedData', 'configJson'
+    ]);
     login.value = data.login || '';
     token.value = data.token || '';
     request_link.value = data.request_link || '';
     baseUrl.value = data.baseUrl || '';
+    pastedData.value = data.pastedData || '';
+    configJson.value = data.configJson || '';
   })
 </script>
 
@@ -159,6 +191,24 @@
       <input v-model="request_link" type="text" placeholder="schema URL (createmeta)" />
       <input v-model="baseUrl" type="text" placeholder="baseUrl (https://example.atlassian.net)" />
       <button @click="loadSchema">load</button>
+    </div>
+
+    <div :class="$style.container">
+      <h2>Импорт данных</h2>
+      <label :class="$style.subLabel">Данные (TSV: 1-я строка — заголовки, 2-я — значения)</label>
+      <textarea
+        v-model="pastedData"
+        rows="3"
+        placeholder="Entry No.&#9;Box No.&#9;...&#10;73784468&#9;GV14B01ONHOLD&#9;..."
+      ></textarea>
+      <label :class="$style.subLabel">Конфиг (JSON)</label>
+      <textarea
+        v-model="configJson"
+        rows="8"
+        :class="$style.codeArea"
+        placeholder='{ "summary": { "type": "internal", "value": "Entry No." } }'
+      ></textarea>
+      <button @click="applyConfig">Применить конфиг</button>
     </div>
 
     <div :class="$style.container">
@@ -249,6 +299,17 @@ h1 {
 
 .statusOk { color: #2a9d2a; }
 .statusError { color: #d33; }
+
+.subLabel {
+  font-size: 0.85rem;
+  color: color-mix(in srgb, CanvasText 70%, transparent);
+}
+
+.codeArea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  white-space: pre;
+}
 
 input{
   min-width: 300px;
