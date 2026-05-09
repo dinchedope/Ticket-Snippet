@@ -9,12 +9,8 @@
   import Labels from './Components/Labels.vue';
   import IssueLink from './Components/Issue-link.vue';
   import TimeTracking from './Components/Time-tracking.vue';
-
-  interface Settings {
-    apiToken: string;
-    email: string;
-    rowInput?: string;
-  }
+  import { fetchCreateMeta, createIssue, type JiraConfig } from './services/jiraApi'
+  import { serializeForm } from './services/serializeForm'
 
   interface JiraIssue {
     fields: any[];
@@ -25,54 +21,55 @@
 
   const form = ref<Record<string, any>>({});
 
+  const status = ref<{ kind: 'idle' | 'ok' | 'error'; message: string }>({
+    kind: 'idle',
+    message: ''
+  });
 
-  // request_link
-  const request_link = ref('');
-  watch(request_link, async (newValue) => {
-    await chrome.storage.local.set({
-      request_link: newValue
-    })  
-  })
-
-  // Login
-  const login = ref('');
-  watch(login, async (newValue) => {
-    await chrome.storage.local.set({
-      login: newValue
-    })  
-  })
-
-  // Token
-  const token =ref('');
-  watch(token, async (newValue) => {
-    await chrome.storage.local.set({
-      token: newValue
-    })  
-  })
-
-
-  async function loadPosts(link: string, settings: Settings) {
-    const auth = btoa(`${settings.email}:${settings.apiToken}`);
-    const response = await fetch(link, {
-      method: "GET",
-     headers: {
-      Authorization: `Basic ${auth}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
+  function persisted(key: string) {
+    const r = ref('')
+    watch(r, async (v) => {
+      await chrome.storage.local.set({ [key]: v })
     })
-    jiraScheme.value = await response.json();
-    jiraSchemeString.value = JSON.stringify(jiraScheme.value, null, 2);
-
-    const next: Record<string, any> = {};
-    for (const field of jiraScheme.value.fields ?? []) {
-      next[field.key] = getInitialValue(field);
-    }
-    form.value = next;
+    return r
   }
 
-  function submitTicket() {
-    console.log('form values', form.value);
+  const login = persisted('login');
+  const token = persisted('token');
+  const request_link = persisted('request_link');
+  const baseUrl = persisted('baseUrl');
+
+  function jiraConfig(): JiraConfig {
+    return { baseUrl: baseUrl.value, email: login.value, apiToken: token.value };
+  }
+
+  async function loadSchema() {
+    try {
+      status.value = { kind: 'idle', message: 'Загрузка схемы...' };
+      const data = await fetchCreateMeta(request_link.value, jiraConfig());
+      jiraScheme.value = data;
+      jiraSchemeString.value = JSON.stringify(data, null, 2);
+
+      const next: Record<string, any> = {};
+      for (const field of data.fields ?? []) {
+        next[field.key] = getInitialValue(field);
+      }
+      form.value = next;
+      status.value = { kind: 'ok', message: 'Схема загружена' };
+    } catch (e: any) {
+      status.value = { kind: 'error', message: e.message ?? String(e) };
+    }
+  }
+
+  async function submitTicket() {
+    try {
+      status.value = { kind: 'idle', message: 'Создаём тикет...' };
+      const payload = serializeForm(form.value, jiraScheme.value.fields);
+      const created = await createIssue(jiraConfig(), payload);
+      status.value = { kind: 'ok', message: `Создан: ${created.key}` };
+    } catch (e: any) {
+      status.value = { kind: 'error', message: e.message ?? String(e) };
+    }
   }
 
 
@@ -146,53 +143,47 @@
 
 
   onMounted(async () => {
-    let data = await chrome.storage.local.get('login');
-    login.value = data.login || "";
-
-    data = await chrome.storage.local.get('token');
-    token.value = data.token || "";
-
-    data = await chrome.storage.local.get('request_link');
-    request_link.value = data.request_link || "";
+    const data = await chrome.storage.local.get(['login', 'token', 'request_link', 'baseUrl']);
+    login.value = data.login || '';
+    token.value = data.token || '';
+    request_link.value = data.request_link || '';
+    baseUrl.value = data.baseUrl || '';
   })
 </script>
 
 <template>
   <main>
     <div :class="$style.container">
-      <input 
-          v-model="login" 
-          type="text" 
-          placeholder="login"
-      />
-      <input 
-          v-model="token" 
-          type="text" 
-          placeholder="token"
-      />
-      <input 
-          v-model="request_link" 
-          type="text" 
-          placeholder="ticket_request"
-      />
-      <button @click="loadPosts(request_link, {email: login, apiToken: token} as Settings)">
-        load
-      </button>
+      <input v-model="login" type="text" placeholder="email" />
+      <input v-model="token" type="text" placeholder="api token" />
+      <input v-model="request_link" type="text" placeholder="schema URL (createmeta)" />
+      <input v-model="baseUrl" type="text" placeholder="baseUrl (https://example.atlassian.net)" />
+      <button @click="loadSchema">load</button>
     </div>
 
     <div :class="$style.container">
       <h1>Создать тикет в Jira</h1>
         <template v-for="{ field, ui } in renderedFields" :key="field.key">
-          <component
-            :is="ui!.component"
-            v-bind="ui!.props"
-            v-model="form[field.key]"
-          />
+          <div :class="$style.fieldRow">
+            <span :class="$style.fieldKey">{{ field.key }}</span>
+            <component
+              :is="ui!.component"
+              v-bind="ui!.props"
+              v-model="form[field.key]"
+            />
+          </div>
         </template>
 
         <button v-if="renderedFields.length" @click="submitTicket">
           Создать тикет
         </button>
+
+        <p
+          v-if="status.message"
+          :class="[$style.status, status.kind === 'error' && $style.statusError, status.kind === 'ok' && $style.statusOk]"
+        >
+          {{ status.message }}
+        </p>
     </div>
 
     <div :class="$style.container">
@@ -234,16 +225,30 @@ h1 {
   margin: 0 0 24px;
 }
 
-.field {
+.fieldRow {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 16px;
+  align-items: flex-start;
+  gap: 8px;
 }
 
-.field__label {
-  font-weight: 500;
+.fieldKey {
+  flex-shrink: 0;
+  width: 120px;
+  padding-top: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  color: color-mix(in srgb, CanvasText 60%, transparent);
+  word-break: break-all;
 }
+
+.status {
+  margin: 0;
+  font-size: 0.9rem;
+  color: color-mix(in srgb, CanvasText 70%, transparent);
+}
+
+.statusOk { color: #2a9d2a; }
+.statusError { color: #d33; }
 
 input{
   min-width: 300px;
