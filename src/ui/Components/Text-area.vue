@@ -1,46 +1,42 @@
 <script setup lang="ts">
-    import { ref } from 'vue';
+    defineProps<{
+        name?: string
+        required?: boolean
+    }>()
 
-    const value = ref("");
-
-    defineProps({
-        name: String,
-        // value: String,
-        required: Boolean
-    })
+    const value = defineModel<string>({ default: '' })
 </script>
 
 <template>
-    <div class="container">
-        <p class="title">{{ name }}<p class="required" v-if="required">*</p></p>
-        <TextArea 
+    <div class="text-area">
+        <p class="title">
+            {{ name }}<span class="required" v-if="required">*</span>
+        </p>
+        <textarea
             v-model="value"
-            type="text" 
+            rows="4"
         />
     </div>
-
 </template>
 
 <style scoped>
-*{
+.text-area {
     display: flex;
-    padding: 0;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.title {
     margin: 0;
-}
-
-.container{
-    display: flex;
-}
-
-.title{
     color: #fff;
 }
 
-.required{
+.required {
     color: red;
+    margin-left: 2px;
 }
 
-input{
+textarea {
     min-width: 300px;
     font-size: 16px;
     padding: 8px 10px;
@@ -48,5 +44,6 @@ input{
     border-radius: 6px;
     background: Field;
     color: FieldText;
+    resize: vertical;
 }
 </style>

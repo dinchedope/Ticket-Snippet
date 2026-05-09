@@ -1,7 +1,14 @@
 <script setup lang="ts">
-  import { ref, watch, onMounted } from 'vue'
+  import { ref, watch, onMounted, computed } from 'vue'
   import TextField from './Components/Text-field.vue';
   import TextArea from './Components/Text-area.vue';
+  import Select from './Components/Select.vue';
+  import DatePicker from './Components/Date-picker.vue';
+  import UserPicker from './Components/User-picker.vue';
+  import Attachment from './Components/Attachment.vue';
+  import Labels from './Components/Labels.vue';
+  import IssueLink from './Components/Issue-link.vue';
+  import TimeTracking from './Components/Time-tracking.vue';
 
   interface Settings {
     apiToken: string;
@@ -15,6 +22,8 @@
 
   const jiraSchemeString = ref("");
   const jiraScheme = ref<JiraIssue>({ fields: []});
+
+  const form = ref<Record<string, any>>({});
 
 
   // request_link
@@ -54,37 +63,86 @@
     })
     jiraScheme.value = await response.json();
     jiraSchemeString.value = JSON.stringify(jiraScheme.value, null, 2);
+
+    const next: Record<string, any> = {};
+    for (const field of jiraScheme.value.fields ?? []) {
+      next[field.key] = getInitialValue(field);
+    }
+    form.value = next;
+  }
+
+  function submitTicket() {
+    console.log('form values', form.value);
   }
 
 
   function getUiFieldType(field: any) {
     const schema = field.schema
+    if (!schema) return null
 
-    // if (!schema) return 'unknown'
+    const baseProps = { name: field.name, required: field.required }
 
-    if (schema.type === 'string' && schema.system === 'summary') return TextField; 
-    if (schema.type === 'string' && schema.system === 'description') return TextArea; 
-    // if (schema.type === 'number') return 'number'
-    // if (schema.type === 'date') return 'date'
-    // if (schema.type === 'datetime') return 'datetime'
-    // if (schema.type === 'option') return 'select'
-    // if (schema.type === 'user') return 'user-picker'
-    // if (schema.type === 'group') return 'group-picker'
+    if (schema.type === 'string' && schema.system === 'summary')
+      return { component: TextField, props: baseProps }
+    if (schema.type === 'string' && schema.system === 'description')
+      return { component: TextArea, props: baseProps }
+    if (schema.type === 'string')
+      return { component: TextField, props: baseProps }
 
-    // if (schema.type === 'array' && schema.items === 'option') {
-    //   return 'multi-select'
-    // }
+    if (schema.type === 'date')
+      return { component: DatePicker, props: baseProps }
 
-    // if (schema.type === 'array' && schema.items === 'user') {
-    //   return 'multi-user-picker'
-    // }
+    if (
+      schema.type === 'option' ||
+      schema.type === 'priority' ||
+      schema.type === 'project' ||
+      schema.type === 'issuetype'
+    ) {
+      return {
+        component: Select,
+        props: { ...baseProps, options: field.allowedValues ?? [] }
+      }
+    }
 
-    // if (schema.type === 'array' && schema.items === 'string') {
-    //   return 'text-array'
-    // }
+    if (schema.type === 'user')
+      return { component: UserPicker, props: baseProps }
 
-    // return 'unknown'
+    if (schema.type === 'issuelink')
+      return { component: IssueLink, props: baseProps }
+
+    if (schema.type === 'array' && schema.items === 'attachment')
+      return { component: Attachment, props: baseProps }
+
+    if (schema.type === 'array' && schema.items === 'string')
+      return { component: Labels, props: baseProps }
+
+    if (schema.type === 'array' && schema.items === 'issuelinks')
+      return { component: IssueLink, props: { ...baseProps, multiple: true } }
+
+    if (schema.type === 'timetracking')
+      return { component: TimeTracking, props: baseProps }
+
+    return null
   }
+
+  function getInitialValue(field: any): any {
+    if (field.defaultValue !== undefined && field.defaultValue !== null) {
+      if (typeof field.defaultValue === 'object') {
+        return String(field.defaultValue.id ?? field.defaultValue.value ?? '')
+      }
+      return field.defaultValue
+    }
+    const schema = field.schema
+    if (schema?.type === 'array') return []
+    if (schema?.type === 'timetracking') return {}
+    return ''
+  }
+
+  const renderedFields = computed(() =>
+    (jiraScheme.value.fields ?? [])
+      .map(field => ({ field, ui: getUiFieldType(field) }))
+      .filter(item => item.ui !== null)
+  )
 
 
   onMounted(async () => {
@@ -124,24 +182,17 @@
 
     <div :class="$style.container">
       <h1>Создать тикет в Jira</h1>
-        <template v-for="field in jiraScheme.fields" :key="field.key">
-          <label>{{ field.name }}</label>
-            <component 
-            :name="field.name"
-            :required="field.required"
-            :is="getUiFieldType(field)"/>
-          <!-- <input
-            v-if="field.schema.type === 'string'"
+        <template v-for="{ field, ui } in renderedFields" :key="field.key">
+          <component
+            :is="ui!.component"
+            v-bind="ui!.props"
             v-model="form[field.key]"
-            type="text"
           />
-
-          <textarea
-            v-else-if="field.schema.type === 'textarea'"
-            v-model="form[field.key]"
-          ></textarea> -->
         </template>
-    
+
+        <button v-if="renderedFields.length" @click="submitTicket">
+          Создать тикет
+        </button>
     </div>
 
     <div :class="$style.container">
