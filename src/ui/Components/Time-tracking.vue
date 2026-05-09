@@ -36,14 +36,15 @@ const remainingEstimate = computed({
 </template>
 
 <style scoped>
-.time-tracking { display: flex; flex-direction: column; gap: 4px; }
-.title { margin: 0; color: #fff; }
+.time-tracking { display: flex; flex-direction: column; gap: 2px; }
+.title { margin: 0; font-size: 0.85rem; color: inherit; }
 .required { color: red; margin-left: 2px; }
-.sub-label { font-size: 0.85rem; color: color-mix(in srgb, CanvasText 70%, transparent); }
+.sub-label { font-size: 0.75rem; color: color-mix(in srgb, CanvasText 70%, transparent); }
 input {
-    min-width: 300px;
-    font-size: 16px;
-    padding: 8px 10px;
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 14px;
+    padding: 6px 8px;
     border: 1px solid color-mix(in srgb, CanvasText 30%, transparent);
     border-radius: 6px;
     background: Field;

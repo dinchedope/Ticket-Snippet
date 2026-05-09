@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { ref, watch, onMounted, computed } from 'vue'
+  import { ref, watch, onMounted, computed, toRaw, type Ref } from 'vue'
   import TextField from './Components/Text-field.vue';
   import TextArea from './Components/Text-area.vue';
   import Select from './Components/Select.vue';
@@ -9,6 +9,7 @@
   import Labels from './Components/Labels.vue';
   import IssueLink from './Components/Issue-link.vue';
   import TimeTracking from './Components/Time-tracking.vue';
+  import Settings from './Components/Settings.vue';
   import { fetchCreateMeta, createIssue, type JiraConfig } from './services/jiraApi'
   import { serializeForm } from './services/serializeForm'
   import { parseTsvData, applyConfigToForm, type Config } from './services/configMapping'
@@ -27,49 +28,89 @@
     message: ''
   });
 
-  function persisted(key: string) {
-    const r = ref('')
+  function persisted<T>(key: string, initial: T): Ref<T> {
+    const r = ref(initial) as Ref<T>
+    const isObj = typeof initial === 'object' && initial !== null
     watch(r, async (v) => {
-      await chrome.storage.local.set({ [key]: v })
-    })
+      await chrome.storage.local.set({ [key]: toRaw(v) })
+    }, { deep: isObj })
     return r
   }
 
-  const login = persisted('login');
-  const token = persisted('token');
-  const request_link = persisted('request_link');
-  const baseUrl = persisted('baseUrl');
-  const pastedData = persisted('pastedData');
-  const configJson = persisted('configJson');
+  const settingsOpen = ref(false);
+
+  const login = persisted('login', '');
+  const token = persisted('token', '');
+  const request_link = persisted('request_link', '');
+  const baseUrl = persisted('baseUrl', '');
+  const pastedData = persisted('pastedData', '');
+  const configJson = persisted('configJson', '');
+  const visibleFields = persisted<Record<string, boolean>>('visibleFields', {});
+  const clearAfterSubmit = persisted('clearAfterSubmit', false);
 
   function jiraConfig(): JiraConfig {
     return { baseUrl: baseUrl.value, email: login.value, apiToken: token.value };
   }
 
+  function validateConnection(): string | null {
+    if (!login.value.trim()) return 'Не указан email';
+    if (!token.value.trim()) return 'Не указан API token';
+    if (!request_link.value.trim()) return 'Не указан URL для схемы';
+    return null;
+  }
+
   async function loadSchema() {
+    const err = validateConnection();
+    if (err) {
+      status.value = { kind: 'error', message: err };
+      return;
+    }
     try {
       status.value = { kind: 'idle', message: 'Загрузка схемы...' };
       const data = await fetchCreateMeta(request_link.value, jiraConfig());
       jiraScheme.value = data;
       jiraSchemeString.value = JSON.stringify(data, null, 2);
 
-      const next: Record<string, any> = {};
+      const nextForm: Record<string, any> = {};
+      const nextVisibility: Record<string, boolean> = { ...(visibleFields.value ?? {}) };
       for (const field of data.fields ?? []) {
-        next[field.key] = getInitialValue(field);
+        nextForm[field.key] = getInitialValue(field);
+        if (nextVisibility[field.key] === undefined) {
+          nextVisibility[field.key] = true;
+        }
       }
-      form.value = next;
+      form.value = nextForm;
+      visibleFields.value = nextVisibility;
       status.value = { kind: 'ok', message: 'Схема загружена' };
     } catch (e: any) {
       status.value = { kind: 'error', message: e.message ?? String(e) };
     }
   }
 
+  function resetForm() {
+    const next: Record<string, any> = {};
+    for (const field of jiraScheme.value.fields ?? []) {
+      next[field.key] = getInitialValue(field);
+    }
+    form.value = next;
+    pastedData.value = '';
+  }
+
   async function submitTicket() {
+    if (!baseUrl.value.trim()) {
+      status.value = { kind: 'error', message: 'Не указан baseUrl' };
+      return;
+    }
+    if (!jiraScheme.value.fields?.length) {
+      status.value = { kind: 'error', message: 'Сначала загрузите схему' };
+      return;
+    }
     try {
       status.value = { kind: 'idle', message: 'Создаём тикет...' };
       const payload = serializeForm(form.value, jiraScheme.value.fields);
       const created = await createIssue(jiraConfig(), payload);
       status.value = { kind: 'ok', message: `Создан: ${created.key}` };
+      if (clearAfterSubmit.value) resetForm();
     } catch (e: any) {
       status.value = { kind: 'error', message: e.message ?? String(e) };
     }
@@ -165,6 +206,7 @@
 
   const renderedFields = computed(() =>
     (jiraScheme.value.fields ?? [])
+      .filter(field => visibleFields.value?.[field.key] !== false)
       .map(field => ({ field, ui: getUiFieldType(field) }))
       .filter(item => item.ui !== null)
   )
@@ -172,7 +214,8 @@
 
   onMounted(async () => {
     const data = await chrome.storage.local.get([
-      'login', 'token', 'request_link', 'baseUrl', 'pastedData', 'configJson'
+      'login', 'token', 'request_link', 'baseUrl',
+      'pastedData', 'configJson', 'visibleFields', 'clearAfterSubmit'
     ]);
     login.value = data.login || '';
     token.value = data.token || '';
@@ -180,155 +223,258 @@
     baseUrl.value = data.baseUrl || '';
     pastedData.value = data.pastedData || '';
     configJson.value = data.configJson || '';
+    visibleFields.value = data.visibleFields || {};
+    clearAfterSubmit.value = !!data.clearAfterSubmit;
   })
 </script>
 
 <template>
-  <main>
-    <div :class="$style.container">
-      <input v-model="login" type="text" placeholder="email" />
-      <input v-model="token" type="text" placeholder="api token" />
-      <input v-model="request_link" type="text" placeholder="schema URL (createmeta)" />
-      <input v-model="baseUrl" type="text" placeholder="baseUrl (https://example.atlassian.net)" />
-      <button @click="loadSchema">load</button>
-    </div>
+  <main :class="$style.app">
+    <Settings
+      v-if="settingsOpen"
+      v-model:login="login"
+      v-model:token="token"
+      v-model:requestLink="request_link"
+      v-model:baseUrl="baseUrl"
+      v-model:configJson="configJson"
+      v-model:visibleFields="visibleFields"
+      v-model:clearAfterSubmit="clearAfterSubmit"
+      :fields="jiraScheme.fields"
+      :schemePreview="jiraSchemeString"
+      @load-schema="loadSchema"
+      @close="settingsOpen = false"
+    />
 
-    <div :class="$style.container">
-      <h2>Импорт данных</h2>
-      <label :class="$style.subLabel">Данные (TSV: 1-я строка — заголовки, 2-я — значения)</label>
-      <textarea
-        v-model="pastedData"
-        rows="3"
-        placeholder="Entry No.&#9;Box No.&#9;...&#10;73784468&#9;GV14B01ONHOLD&#9;..."
-      ></textarea>
-      <label :class="$style.subLabel">Конфиг (JSON)</label>
-      <textarea
-        v-model="configJson"
-        rows="8"
-        :class="$style.codeArea"
-        placeholder='{ "summary": { "type": "internal", "value": "Entry No." } }'
-      ></textarea>
-      <button @click="applyConfig">Применить конфиг</button>
-    </div>
+    <template v-else>
+      <header :class="$style.topbar">
+        <h1 :class="$style.title">Создать тикет в Jira</h1>
+        <div :class="$style.topActions">
+          <button :class="$style.primaryBtn" @click="loadSchema">Загрузить схему</button>
+          <button :class="$style.gear" @click="settingsOpen = true" title="Настройки">⚙</button>
+        </div>
+      </header>
 
-    <div :class="$style.container">
-      <h1>Создать тикет в Jira</h1>
-        <template v-for="{ field, ui } in renderedFields" :key="field.key">
-          <div :class="$style.fieldRow">
-            <span :class="$style.fieldKey">{{ field.key }}</span>
-            <component
-              :is="ui!.component"
-              v-bind="ui!.props"
-              v-model="form[field.key]"
-            />
+      <div :class="$style.body">
+        <aside :class="$style.leftPanel">
+          <label :class="$style.subLabel">Данные (TSV)</label>
+          <textarea
+            v-model="pastedData"
+            :class="$style.dataArea"
+            placeholder="Entry No.&#9;Box No.&#9;...&#10;73784468&#9;GV14B01ONHOLD&#9;..."
+          ></textarea>
+          <button :class="$style.primaryBtn" @click="applyConfig">Применить конфиг</button>
+        </aside>
+
+        <section :class="$style.rightPanel">
+          <div :class="$style.formScroll">
+            <p v-if="!jiraScheme.fields.length" :class="$style.empty">
+              Нажмите «Загрузить схему» сверху
+            </p>
+
+            <div
+              v-for="{ field, ui } in renderedFields"
+              :key="field.key"
+              :class="$style.fieldRow"
+            >
+              <span :class="$style.fieldKey">{{ field.key }}</span>
+              <component
+                :is="ui!.component"
+                v-bind="ui!.props"
+                v-model="form[field.key]"
+              />
+            </div>
           </div>
-        </template>
 
-        <button v-if="renderedFields.length" @click="submitTicket">
-          Создать тикет
-        </button>
-
-        <p
-          v-if="status.message"
-          :class="[$style.status, status.kind === 'error' && $style.statusError, status.kind === 'ok' && $style.statusOk]"
-        >
-          {{ status.message }}
-        </p>
-    </div>
-
-    <div :class="$style.container">
-    <textarea
-      v-model="jiraSchemeString"
-      placeholder="Ответ от сервера"
-      rows="6"
-    ></textarea>
-    </div>
+          <footer :class="$style.rightFooter">
+            <button
+              v-if="renderedFields.length"
+              :class="$style.primaryBtn"
+              @click="submitTicket"
+            >
+              Создать тикет
+            </button>
+            <p
+              v-if="status.message"
+              :class="[$style.status, status.kind === 'error' && $style.statusError, status.kind === 'ok' && $style.statusOk]"
+            >
+              {{ status.message }}
+            </p>
+          </footer>
+        </section>
+      </div>
+    </template>
   </main>
-
 </template>
 
 <style module>
-main{
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    height: 100%;
-    justify-content: center;
-    margin-bottom: 300px;
+:global(html), :global(body), :global(#app) {
+  height: 100%;
+  margin: 0;
+  padding: 0;
 }
 
-.container {
-  max-width: 480px;
-  min-width: 370px;
-  margin: 5px;
-  padding: 0 16px;
+:global(body) {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  background: Canvas;
+  color: CanvasText;
+}
+
+.app {
   display: flex;
-  overflow: hidden;
-  flex-wrap: wrap;
   flex-direction: column;
-  gap: 20px;
-
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
 }
 
-h1 {
-  font-size: 1.5rem;
-  margin: 0 0 24px;
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+  flex-shrink: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.topActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.gear {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.gear:hover {
+  background: color-mix(in srgb, CanvasText 10%, transparent);
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.leftPanel {
+  width: 38%;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 8px;
+  border-right: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+  flex-shrink: 0;
+}
+
+.dataArea {
+  flex: 1;
+  min-height: 200px;
+  resize: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  border-radius: 6px;
+  background: Field;
+  color: FieldText;
+  white-space: pre;
+}
+
+.rightPanel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.formScroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .fieldRow {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  flex-direction: column;
+  gap: 1px;
 }
 
 .fieldKey {
-  flex-shrink: 0;
-  width: 120px;
-  padding-top: 4px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8rem;
+  font-size: 0.7rem;
+  color: color-mix(in srgb, CanvasText 50%, transparent);
+}
+
+.empty {
+  margin: 0;
+  font-size: 0.9rem;
   color: color-mix(in srgb, CanvasText 60%, transparent);
-  word-break: break-all;
+  text-align: center;
+  padding: 32px 16px;
+}
+
+.rightFooter {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  border-top: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: color-mix(in srgb, Canvas 95%, CanvasText);
 }
 
 .status {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: color-mix(in srgb, CanvasText 70%, transparent);
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
 }
 
 .statusOk { color: #2a9d2a; }
 .statusError { color: #d33; }
 
 .subLabel {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: color-mix(in srgb, CanvasText 70%, transparent);
 }
 
-.codeArea {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
-  white-space: pre;
-}
-
-input{
-  min-width: 300px;
-  font-size: 16px;
-}
-
-input,
-textarea,
-select {
-  padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, CanvasText 30%, transparent);
+.primaryBtn {
+  font: inherit;
+  padding: 7px 14px;
+  border: 0;
   border-radius: 6px;
-  background: Field;
-  color: FieldText;
+  background: AccentColor;
+  color: AccentColorText;
+  cursor: pointer;
+  font-size: 0.9rem;
 }
 
-textarea {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  white-space: pre;
+.primaryBtn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.primaryBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 input:focus,
@@ -337,42 +483,6 @@ select:focus {
   outline: 2px solid AccentColor;
   outline-offset: 1px;
   border-color: transparent;
-}
-
-.hint {
-  margin: -4px 0 12px;
-  font-size: 0.85rem;
-  color: color-mix(in srgb, CanvasText 70%, transparent);
-}
-
-.hint--error {
-  color: #d33;
-}
-
-.actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 8px;
-}
-
-button {
-  font: inherit;
-  padding: 8px 16px;
-  border: 0;
-  border-radius: 6px;
-  background: AccentColor;
-  color: AccentColorText;
-  cursor: pointer;
-}
-
-button:hover:not(:disabled) {
-  filter: brightness(1.05);
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: progress;
 }
 
 .status {

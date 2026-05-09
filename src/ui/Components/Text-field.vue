@@ -23,12 +23,13 @@
 .text-field {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
 }
 
 .title {
     margin: 0;
-    color: #fff;
+    font-size: 0.85rem;
+    color: inherit;
 }
 
 .required {
@@ -37,9 +38,10 @@
 }
 
 input {
-    min-width: 300px;
-    font-size: 16px;
-    padding: 8px 10px;
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 14px;
+    padding: 6px 8px;
     border: 1px solid color-mix(in srgb, CanvasText 30%, transparent);
     border-radius: 6px;
     background: Field;
