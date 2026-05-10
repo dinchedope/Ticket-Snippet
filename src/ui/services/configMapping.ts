@@ -1,10 +1,14 @@
 export interface ConfigEntry {
-    type: 'internal' | 'jira'
+    /** 'jira' — литеральное значение; 'internal1' | 'internal2' | ... — данные из соответствующего дата-блока */
+    type: string
     value: string
     isValueId?: boolean
 }
 
 export type Config = Record<string, ConfigEntry>
+
+/** Карта распарсенных дата-блоков: { internal1: { "Entry No.": "...", ... }, internal2: {...} } */
+export type DataMap = Record<string, Record<string, string>>
 
 function splitRow(line: string): string[] {
     if (line.includes('\t')) return line.split('\t')
@@ -36,7 +40,7 @@ function findOptionIdByLabel(field: any, label: string): string | null {
 export function applyConfigToForm(
     form: Record<string, any>,
     config: Config,
-    parsedData: Record<string, string>,
+    dataMap: DataMap,
     fields: any[]
 ): Record<string, any> {
     const fieldsByKey: Record<string, any> = {}
@@ -47,14 +51,15 @@ export function applyConfigToForm(
     for (const [fieldKey, entry] of Object.entries(config)) {
         let value: any
 
-        if (entry.type === 'internal') {
-            value = parsedData[entry.value] ?? ''
-        } else if (entry.type === 'jira') {
+        if (entry.type === 'jira') {
             value = entry.value
             if (entry.isValueId === false) {
                 const id = findOptionIdByLabel(fieldsByKey[fieldKey], String(value))
                 if (id !== null) value = id
             }
+        } else if (entry.type.startsWith('internal')) {
+            const dataset = dataMap[entry.type]
+            value = dataset?.[entry.value] ?? ''
         } else {
             continue
         }

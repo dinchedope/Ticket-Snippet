@@ -12,7 +12,7 @@
   import Settings from './Components/Settings.vue';
   import { fetchCreateMeta, createIssue, type JiraConfig } from './services/jiraApi'
   import { serializeForm } from './services/serializeForm'
-  import { parseTsvData, applyConfigToForm, type Config } from './services/configMapping'
+  import { parseTsvData, applyConfigToForm, type Config, type DataMap } from './services/configMapping'
 
   interface JiraIssue {
     fields: any[];
@@ -43,10 +43,35 @@
   const token = persisted('token', '');
   const request_link = persisted('request_link', '');
   const baseUrl = persisted('baseUrl', '');
-  const pastedData = persisted('pastedData', '');
+  const dataInputs = persisted<string[]>('dataInputs', ['']);
   const configJson = persisted('configJson', '');
   const visibleFields = persisted<Record<string, boolean>>('visibleFields', {});
   const clearAfterSubmit = persisted('clearAfterSubmit', false);
+
+  /** Имя дата-блока по индексу: 0 -> internal1 */
+  function inputName(i: number): string {
+    return `internal${i + 1}`;
+  }
+
+  /** Распарсенные дата-блоки (для предпросмотра) */
+  const parsedInputs = computed(() => dataInputs.value.map(raw => parseTsvData(raw)));
+
+  function addDataInput() {
+    dataInputs.value = [...dataInputs.value, ''];
+  }
+
+  function removeDataInput(i: number) {
+    const next = dataInputs.value.filter((_, idx) => idx !== i);
+    dataInputs.value = next.length ? next : [''];
+  }
+
+  function buildDataMap(): DataMap {
+    const map: DataMap = {};
+    dataInputs.value.forEach((raw, i) => {
+      map[inputName(i)] = parseTsvData(raw);
+    });
+    return map;
+  }
 
   function jiraConfig(): JiraConfig {
     return { baseUrl: baseUrl.value, email: login.value, apiToken: token.value };
@@ -93,7 +118,7 @@
       next[field.key] = getInitialValue(field);
     }
     form.value = next;
-    pastedData.value = '';
+    dataInputs.value = [''];
   }
 
   async function submitTicket() {
@@ -118,16 +143,16 @@
 
   function applyConfig() {
     try {
-      const parsed = parseTsvData(pastedData.value);
+      const dataMap = buildDataMap();
       const config: Config = configJson.value.trim()
         ? JSON.parse(configJson.value)
         : {};
-      console.log('[applyConfig] parsed TSV:', parsed);
+      console.log('[applyConfig] dataMap:', dataMap);
       console.log('[applyConfig] config:', config);
       form.value = applyConfigToForm(
         form.value,
         config,
-        parsed,
+        dataMap,
         jiraScheme.value.fields ?? []
       );
       console.log('[applyConfig] form after:', form.value);
@@ -215,13 +240,15 @@
   onMounted(async () => {
     const data = await chrome.storage.local.get([
       'login', 'token', 'request_link', 'baseUrl',
-      'pastedData', 'configJson', 'visibleFields', 'clearAfterSubmit'
+      'dataInputs', 'configJson', 'visibleFields', 'clearAfterSubmit'
     ]);
     login.value = data.login || '';
     token.value = data.token || '';
     request_link.value = data.request_link || '';
     baseUrl.value = data.baseUrl || '';
-    pastedData.value = data.pastedData || '';
+    dataInputs.value = Array.isArray(data.dataInputs) && data.dataInputs.length
+      ? data.dataInputs
+      : [''];
     configJson.value = data.configJson || '';
     visibleFields.value = data.visibleFields || {};
     clearAfterSubmit.value = !!data.clearAfterSubmit;
@@ -255,18 +282,49 @@
 
       <div :class="$style.body">
         <aside :class="$style.leftPanel">
-          <label :class="$style.subLabel">Данные (TSV)</label>
-          <textarea
-            v-model="pastedData"
-            :class="[$style.dataArea, $style.tsvArea]"
-            placeholder="Entry No.&#9;Box No.&#9;...&#10;73784468&#9;GV14B01ONHOLD&#9;..."
-          ></textarea>
+          <div :class="$style.dataBlocks">
+            <div
+              v-for="(_, i) in dataInputs"
+              :key="i"
+              :class="$style.dataBlock"
+            >
+              <div :class="$style.dataBlockHead">
+                <span :class="$style.dataName">{{ inputName(i) }}</span>
+                <button
+                  v-if="dataInputs.length > 1"
+                  :class="$style.iconBtn"
+                  title="Удалить"
+                  @click="removeDataInput(i)"
+                >✕</button>
+              </div>
+              <textarea
+                v-model="dataInputs[i]"
+                :class="$style.miniArea"
+                rows="2"
+                placeholder="вставьте строку данных (TSV: заголовки + значения)"
+              ></textarea>
+              <div :class="$style.parsedBox">
+                <template v-if="Object.keys(parsedInputs[i]).length">
+                  <div
+                    v-for="(val, k) in parsedInputs[i]"
+                    :key="k"
+                    :class="$style.parsedRow"
+                  >
+                    <span :class="$style.parsedKey">{{ k }}</span>
+                    <span :class="$style.parsedVal">{{ val }}</span>
+                  </div>
+                </template>
+                <span v-else :class="$style.parsedEmpty">— пусто —</span>
+              </div>
+            </div>
+            <button :class="$style.addBtn" @click="addDataInput">+ Добавить данные</button>
+          </div>
 
           <label :class="$style.subLabel">Конфиг (JSON)</label>
           <textarea
             v-model="configJson"
             :class="[$style.dataArea, $style.configArea]"
-            placeholder='{ "summary": { "type": "internal", "value": "Entry No." } }'
+            placeholder='{ "summary": { "type": "internal1", "value": "Entry No." } }'
           ></textarea>
 
           <button :class="$style.primaryBtn" @click="applyConfig">Применить конфиг</button>
@@ -377,14 +435,127 @@
 }
 
 .leftPanel {
-  width: 38%;
-  min-width: 240px;
+  width: 40%;
+  min-width: 280px;
   display: flex;
   flex-direction: column;
   padding: 12px;
-  gap: 8px;
+  gap: 10px;
   border-right: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
   flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.dataBlocks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dataBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.dataBlockHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dataName {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: AccentColor;
+}
+
+.iconBtn {
+  background: transparent;
+  border: 0;
+  color: color-mix(in srgb, CanvasText 60%, transparent);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.iconBtn:hover {
+  background: color-mix(in srgb, CanvasText 12%, transparent);
+  color: #d33;
+}
+
+.miniArea {
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  border-radius: 6px;
+  background: Field;
+  color: FieldText;
+  white-space: pre;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 38px;
+}
+
+.parsedBox {
+  max-height: 130px;
+  overflow-y: auto;
+  border: 1px dashed color-mix(in srgb, CanvasText 20%, transparent);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: color-mix(in srgb, Canvas 92%, CanvasText);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.parsedRow {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.parsedKey {
+  flex-shrink: 0;
+  min-width: 90px;
+  max-width: 130px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: color-mix(in srgb, CanvasText 55%, transparent);
+  word-break: break-all;
+}
+
+.parsedVal {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.parsedEmpty {
+  font-size: 11px;
+  color: color-mix(in srgb, CanvasText 50%, transparent);
+}
+
+.addBtn {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px dashed color-mix(in srgb, CanvasText 30%, transparent);
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 5px 10px;
+  border-radius: 6px;
+}
+
+.addBtn:hover {
+  background: color-mix(in srgb, CanvasText 8%, transparent);
 }
 
 .dataArea {
@@ -401,14 +572,9 @@
   width: 100%;
 }
 
-.tsvArea {
-  flex: 1;
-  min-height: 70px;
-}
-
 .configArea {
-  flex: 2;
-  min-height: 120px;
+  min-height: 140px;
+  resize: vertical;
 }
 
 .rightPanel {
@@ -500,19 +666,5 @@ select:focus {
   outline: 2px solid AccentColor;
   outline-offset: 1px;
   border-color: transparent;
-}
-
-.status {
-  color: color-mix(in srgb, CanvasText 70%, transparent);
-  word-break: break-word;
-}
-
-.status--error {
-  color: #d33;
-}
-
-.status a {
-  color: inherit;
-  text-decoration: underline;
 }
 </style>
