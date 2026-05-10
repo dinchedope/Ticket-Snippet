@@ -39,37 +39,61 @@
 
   const settingsOpen = ref(false);
 
+  interface DataBlock {
+    id: number;
+    raw: string;
+  }
+
+  function normalizeBlocks(value: any): DataBlock[] {
+    if (!Array.isArray(value) || !value.length) return [{ id: 1, raw: '' }];
+    const blocks: DataBlock[] = [];
+    let fallbackId = 1;
+    for (const b of value) {
+      if (b && typeof b === 'object' && typeof b.raw === 'string') {
+        const id = typeof b.id === 'number' ? b.id : fallbackId;
+        blocks.push({ id, raw: b.raw });
+        fallbackId = Math.max(fallbackId, id) + 1;
+      }
+    }
+    return blocks.length ? blocks : [{ id: 1, raw: '' }];
+  }
+
   const login = persisted('login', '');
   const token = persisted('token', '');
   const request_link = persisted('request_link', '');
   const baseUrl = persisted('baseUrl', '');
-  const dataInputs = persisted<string[]>('dataInputs', ['']);
+  const dataBlocks = persisted<DataBlock[]>('dataBlocks', [{ id: 1, raw: '' }]);
   const configJson = persisted('configJson', '');
   const visibleFields = persisted<Record<string, boolean>>('visibleFields', {});
   const clearAfterSubmit = persisted('clearAfterSubmit', false);
 
-  /** Имя дата-блока по индексу: 0 -> internal1 */
-  function inputName(i: number): string {
-    return `internal${i + 1}`;
+  function blockName(id: number): string {
+    return `internal${id}`;
+  }
+
+  function nextBlockId(): number {
+    return dataBlocks.value.reduce((max, b) => Math.max(max, b.id), 0) + 1;
   }
 
   /** Распарсенные дата-блоки (для предпросмотра) */
-  const parsedInputs = computed(() => dataInputs.value.map(raw => parseTsvData(raw)));
+  const parsedBlocks = computed(() =>
+    dataBlocks.value.map(b => ({ id: b.id, parsed: parseTsvData(b.raw) }))
+  );
 
-  function addDataInput() {
-    dataInputs.value = [...dataInputs.value, ''];
+  function addDataBlock() {
+    dataBlocks.value = [...dataBlocks.value, { id: nextBlockId(), raw: '' }];
   }
 
-  function removeDataInput(i: number) {
-    const next = dataInputs.value.filter((_, idx) => idx !== i);
-    dataInputs.value = next.length ? next : [''];
+  function removeDataBlock(id: number) {
+    const next = dataBlocks.value.filter(b => b.id !== id);
+    dataBlocks.value = next.length ? next : [{ id: 1, raw: '' }];
   }
 
   function buildDataMap(): DataMap {
     const map: DataMap = {};
-    dataInputs.value.forEach((raw, i) => {
-      map[inputName(i)] = parseTsvData(raw);
-    });
+    for (const b of dataBlocks.value) {
+      map[blockName(b.id)] = parseTsvData(b.raw);
+    }
     return map;
   }
 
@@ -118,7 +142,7 @@
       next[field.key] = getInitialValue(field);
     }
     form.value = next;
-    dataInputs.value = [''];
+    dataBlocks.value = [{ id: 1, raw: '' }];
   }
 
   async function submitTicket() {
@@ -240,15 +264,13 @@
   onMounted(async () => {
     const data = await chrome.storage.local.get([
       'login', 'token', 'request_link', 'baseUrl',
-      'dataInputs', 'configJson', 'visibleFields', 'clearAfterSubmit'
+      'dataBlocks', 'configJson', 'visibleFields', 'clearAfterSubmit'
     ]);
     login.value = data.login || '';
     token.value = data.token || '';
     request_link.value = data.request_link || '';
     baseUrl.value = data.baseUrl || '';
-    dataInputs.value = Array.isArray(data.dataInputs) && data.dataInputs.length
-      ? data.dataInputs
-      : [''];
+    dataBlocks.value = normalizeBlocks(data.dataBlocks);
     configJson.value = data.configJson || '';
     visibleFields.value = data.visibleFields || {};
     clearAfterSubmit.value = !!data.clearAfterSubmit;
@@ -284,29 +306,29 @@
         <aside :class="$style.leftPanel">
           <div :class="$style.dataBlocks">
             <div
-              v-for="(_, i) in dataInputs"
-              :key="i"
+              v-for="(block, i) in dataBlocks"
+              :key="block.id"
               :class="$style.dataBlock"
             >
               <div :class="$style.dataBlockHead">
-                <span :class="$style.dataName">{{ inputName(i) }}</span>
+                <span :class="$style.dataName">{{ blockName(block.id) }}</span>
                 <button
-                  v-if="dataInputs.length > 1"
+                  v-if="dataBlocks.length > 1"
                   :class="$style.iconBtn"
                   title="Удалить"
-                  @click="removeDataInput(i)"
+                  @click="removeDataBlock(block.id)"
                 >✕</button>
               </div>
               <textarea
-                v-model="dataInputs[i]"
+                v-model="dataBlocks[i].raw"
                 :class="$style.miniArea"
                 rows="2"
                 placeholder="вставьте строку данных (TSV: заголовки + значения)"
               ></textarea>
               <div :class="$style.parsedBox">
-                <template v-if="Object.keys(parsedInputs[i]).length">
+                <template v-if="Object.keys(parsedBlocks[i].parsed).length">
                   <div
-                    v-for="(val, k) in parsedInputs[i]"
+                    v-for="(val, k) in parsedBlocks[i].parsed"
                     :key="k"
                     :class="$style.parsedRow"
                   >
@@ -317,7 +339,7 @@
                 <span v-else :class="$style.parsedEmpty">— пусто —</span>
               </div>
             </div>
-            <button :class="$style.addBtn" @click="addDataInput">+ Добавить данные</button>
+            <button :class="$style.addBtn" @click="addDataBlock">+ Добавить данные</button>
           </div>
 
           <label :class="$style.subLabel">Конфиг (JSON)</label>
