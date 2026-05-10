@@ -236,7 +236,6 @@
       v-model:token="token"
       v-model:requestLink="request_link"
       v-model:baseUrl="baseUrl"
-      v-model:configJson="configJson"
       v-model:visibleFields="visibleFields"
       v-model:clearAfterSubmit="clearAfterSubmit"
       :fields="jiraScheme.fields"
@@ -259,9 +258,17 @@
           <label :class="$style.subLabel">Данные (TSV)</label>
           <textarea
             v-model="pastedData"
-            :class="$style.dataArea"
+            :class="[$style.dataArea, $style.tsvArea]"
             placeholder="Entry No.&#9;Box No.&#9;...&#10;73784468&#9;GV14B01ONHOLD&#9;..."
           ></textarea>
+
+          <label :class="$style.subLabel">Конфиг (JSON)</label>
+          <textarea
+            v-model="configJson"
+            :class="[$style.dataArea, $style.configArea]"
+            placeholder='{ "summary": { "type": "internal", "value": "Entry No." } }'
+          ></textarea>
+
           <button :class="$style.primaryBtn" @click="applyConfig">Применить конфиг</button>
         </aside>
 
@@ -381,8 +388,6 @@
 }
 
 .dataArea {
-  flex: 1;
-  min-height: 200px;
   resize: none;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
@@ -392,6 +397,18 @@
   background: Field;
   color: FieldText;
   white-space: pre;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.tsvArea {
+  flex: 1;
+  min-height: 70px;
+}
+
+.configArea {
+  flex: 2;
+  min-height: 120px;
 }
 
 .rightPanel {

@@ -3,7 +3,6 @@ const login = defineModel<string>('login')
 const token = defineModel<string>('token')
 const requestLink = defineModel<string>('requestLink')
 const baseUrl = defineModel<string>('baseUrl')
-const configJson = defineModel<string>('configJson')
 const visibleFields = defineModel<Record<string, boolean>>('visibleFields')
 const clearAfterSubmit = defineModel<boolean>('clearAfterSubmit')
 
@@ -41,16 +40,6 @@ function toggleField(key: string) {
             <input v-model="requestLink" type="text" placeholder="schema URL (createmeta)" />
             <input v-model="baseUrl" type="text" placeholder="baseUrl (https://...)" />
             <button class="primary" @click="$emit('loadSchema')">Загрузить схему</button>
-        </section>
-
-        <section>
-            <h3>Конфиг (JSON)</h3>
-            <textarea
-                v-model="configJson"
-                rows="10"
-                class="code"
-                placeholder='{ "summary": { "type": "internal", "value": "Entry No." } }'
-            ></textarea>
         </section>
 
         <section v-if="fields.length">
