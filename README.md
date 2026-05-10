@@ -62,3 +62,23 @@ npm run build
 - Поля формы и логика сохранения — [src/ui/App.vue](src/ui/App.vue).
 - Действие по клику на иконку — [src/background.ts](src/background.ts).
 - Имя, описание, permissions — [manifest.config.ts](manifest.config.ts).
+
+
+
+## Пример конфига 
+
+```
+{
+  "summary":     { "type": "internal3", "value": "Box No." },
+  "description": { "type": "internal1", "value": "Box No." },
+  "priority":    { "type": "jira", "valueIsId": false, "value": "Medium" },
+  "customfield_10004": {
+    "type": "jira", "valueIsId": true, "default": "10002",
+    "value": {
+      "source": { "type": "internal1", "value": "Source Type" },
+      "10000": ["Order Picking", "Order Prepicking"],
+      "10001": ["Order Packing"]
+    }
+  }
+}
+```
