@@ -27,7 +27,7 @@ function getValue(opt: any) {
                 :key="getValue(opt)"
                 :value="getValue(opt)"
             >
-                {{ getLabel(opt) }}
+                {{ getLabel(opt) }} ({{ getValue(opt) }})
             </option>
         </select>
     </div>

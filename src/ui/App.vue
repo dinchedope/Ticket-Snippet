@@ -346,7 +346,18 @@
           <textarea
             v-model="configJson"
             :class="[$style.dataArea, $style.configArea]"
-            placeholder='{ "summary": { "type": "internal1", "value": "Entry No." } }'
+            placeholder='{
+  "summary": { "type": "internal1", "value": "Entry No." },
+  "priority": { "type": "jira", "valueIsId": false, "value": "Medium" },
+  "issuetype": {
+    "type": "jira", "valueIsId": true, "default": "10002",
+    "value": {
+      "source": { "type": "internal1", "value": "Source Type" },
+      "10000": ["Order Picking", "Order Prepicking"],
+      "10001": ["Order Packing"]
+    }
+  }
+}'
           ></textarea>
 
           <button :class="$style.primaryBtn" @click="applyConfig">Применить конфиг</button>
