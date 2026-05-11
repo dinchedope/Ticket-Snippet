@@ -1,30 +1,30 @@
 export interface ConfigSource {
-    /** имя дата-блока, напр. 'internal1' */
+    /** data block name, e.g. 'internal1' */
     type: string
-    /** имя столбца в TSV */
+    /** column name in the TSV */
     value: string
 }
 
 export interface ConfigEntry {
-    /** 'jira' — литеральное / substitution значение; 'internal1' | 'internal2' | ... — данные из дата-блока */
+    /** 'jira' — literal / substitution value; 'internal1' | 'internal2' | ... — data from a data block */
     type: string
     /**
-     * для 'jira': строка (литерал) ИЛИ объект substitution:
+     * for 'jira': a string (literal) OR a substitution object:
      *   { source: { type: 'internal1', value: 'Source Type' },
      *     '10000': ['Order Picking', 'Order Prepicking'],
      *     '10001': ['Order Packing'] }
-     * для 'internalN': имя столбца в TSV
+     * for 'internalN': the column name in the TSV
      */
     value: string | Record<string, any>
-    /** value трактуется как id опции (true, по умолчанию) или как её label (false) */
+    /** whether `value` is treated as an option id (true, default) or as its label (false) */
     valueIsId?: boolean | string
-    /** дефолтный id, если substitution не нашёл совпадения; false/отсутствует — нет дефолта */
+    /** default id used when substitution finds no match; false/absent — no default */
     default?: string | false
 }
 
 export type Config = Record<string, ConfigEntry>
 
-/** Карта распарсенных дата-блоков: { internal1: { "Entry No.": "...", ... }, internal2: {...} } */
+/** Map of parsed data blocks: { internal1: { "Entry No.": "...", ... }, internal2: {...} } */
 export type DataMap = Record<string, Record<string, string>>
 
 function splitRow(line: string): string[] {
@@ -59,17 +59,17 @@ function readSource(src: any, dataMap: DataMap): string {
     return dataMap[src.type]?.[src.value] ?? ''
 }
 
-/** value трактуется как label (а не id), если явно указано valueIsId === false / "false" */
+/** value is treated as a label (not an id) only when valueIsId is explicitly false / "false" */
 function valueIsLabel(entry: ConfigEntry): boolean {
     return entry.valueIsId === false || entry.valueIsId === 'false'
 }
 
-/** Резолвит значение для type === 'jira'. Возвращает null, если значения нет. */
+/** Resolves the value for type === 'jira'. Returns null if there is no value. */
 function resolveJiraValue(entry: ConfigEntry, field: any, dataMap: DataMap): string | null {
     let resolved: string | null
 
     if (entry.value && typeof entry.value === 'object') {
-        // substitution-режим: ищем ключ-id, в чьём массиве есть значение из источника
+        // substitution mode: find the id key whose array contains the source value
         const sourceVal = readSource(entry.value.source, dataMap)
         resolved = null
         for (const [key, candidates] of Object.entries(entry.value)) {
@@ -83,7 +83,7 @@ function resolveJiraValue(entry: ConfigEntry, field: any, dataMap: DataMap): str
             resolved = typeof entry.default === 'string' && entry.default.length ? entry.default : null
         }
     } else {
-        // литеральный режим
+        // literal mode
         resolved = entry.value != null ? String(entry.value) : null
     }
 

@@ -75,7 +75,7 @@
     return dataBlocks.value.reduce((max, b) => Math.max(max, b.id), 0) + 1;
   }
 
-  /** Распарсенные дата-блоки (для предпросмотра) */
+  /** Parsed data blocks (for the preview) */
   const parsedBlocks = computed(() =>
     dataBlocks.value.map(b => ({ id: b.id, parsed: parseTsvData(b.raw) }))
   );
@@ -102,9 +102,9 @@
   }
 
   function validateConnection(): string | null {
-    if (!login.value.trim()) return 'Не указан email';
-    if (!token.value.trim()) return 'Не указан API token';
-    if (!request_link.value.trim()) return 'Не указан URL для схемы';
+    if (!login.value.trim()) return 'Email is not set';
+    if (!token.value.trim()) return 'API token is not set';
+    if (!request_link.value.trim()) return 'Schema URL is not set';
     return null;
   }
 
@@ -115,7 +115,7 @@
       return;
     }
     try {
-      status.value = { kind: 'idle', message: 'Загрузка схемы...' };
+      status.value = { kind: 'idle', message: 'Loading schema...' };
       const data = await fetchCreateMeta(request_link.value, jiraConfig());
       jiraScheme.value = data;
       jiraSchemeString.value = JSON.stringify(data, null, 2);
@@ -130,7 +130,7 @@
       }
       form.value = nextForm;
       visibleFields.value = nextVisibility;
-      status.value = { kind: 'ok', message: 'Схема загружена' };
+      status.value = { kind: 'ok', message: 'Schema loaded' };
     } catch (e: any) {
       status.value = { kind: 'error', message: e.message ?? String(e) };
     }
@@ -147,18 +147,18 @@
 
   async function submitTicket() {
     if (!baseUrl.value.trim()) {
-      status.value = { kind: 'error', message: 'Не указан baseUrl' };
+      status.value = { kind: 'error', message: 'baseUrl is not set' };
       return;
     }
     if (!jiraScheme.value.fields?.length) {
-      status.value = { kind: 'error', message: 'Сначала загрузите схему' };
+      status.value = { kind: 'error', message: 'Load the schema first' };
       return;
     }
     try {
-      status.value = { kind: 'idle', message: 'Создаём тикет...' };
+      status.value = { kind: 'idle', message: 'Creating issue...' };
       const payload = serializeForm(form.value, jiraScheme.value.fields);
       const created = await createIssue(jiraConfig(), payload);
-      status.value = { kind: 'ok', message: `Создан: ${created.key}` };
+      status.value = { kind: 'ok', message: `Created: ${created.key}` };
       if (clearAfterSubmit.value) resetForm();
     } catch (e: any) {
       status.value = { kind: 'error', message: e.message ?? String(e) };
@@ -180,9 +180,9 @@
         jiraScheme.value.fields ?? []
       );
       console.log('[applyConfig] form after:', form.value);
-      status.value = { kind: 'ok', message: 'Конфиг применён' };
+      status.value = { kind: 'ok', message: 'Config applied' };
     } catch (e: any) {
-      status.value = { kind: 'error', message: 'Ошибка конфига: ' + (e.message ?? String(e)) };
+      status.value = { kind: 'error', message: 'Config error: ' + (e.message ?? String(e)) };
     }
   }
 
@@ -295,10 +295,10 @@
 
     <template v-else>
       <header :class="$style.topbar">
-        <h1 :class="$style.title">Создать тикет в Jira</h1>
+        <h1 :class="$style.title">Create a Jira issue</h1>
         <div :class="$style.topActions">
-          <button :class="$style.primaryBtn" @click="loadSchema">Загрузить схему</button>
-          <button :class="$style.gear" @click="settingsOpen = true" title="Настройки">⚙</button>
+          <button :class="$style.primaryBtn" @click="loadSchema">Load schema</button>
+          <button :class="$style.gear" @click="settingsOpen = true" title="Settings">⚙</button>
         </div>
       </header>
 
@@ -315,7 +315,7 @@
                 <button
                   v-if="dataBlocks.length > 1"
                   :class="$style.iconBtn"
-                  title="Удалить"
+                  title="Remove"
                   @click="removeDataBlock(block.id)"
                 >✕</button>
               </div>
@@ -323,7 +323,7 @@
                 v-model="dataBlocks[i].raw"
                 :class="$style.miniArea"
                 rows="2"
-                placeholder="вставьте строку данных (TSV: заголовки + значения)"
+                placeholder="paste a data row (TSV: headers + values)"
               ></textarea>
               <div :class="$style.parsedBox">
                 <template v-if="Object.keys(parsedBlocks[i].parsed).length">
@@ -336,13 +336,13 @@
                     <span :class="$style.parsedVal">{{ val }}</span>
                   </div>
                 </template>
-                <span v-else :class="$style.parsedEmpty">— пусто —</span>
+                <span v-else :class="$style.parsedEmpty">— empty —</span>
               </div>
             </div>
-            <button :class="$style.addBtn" @click="addDataBlock">+ Добавить данные</button>
+            <button :class="$style.addBtn" @click="addDataBlock">+ Add data block</button>
           </div>
 
-          <label :class="$style.subLabel">Конфиг (JSON)</label>
+          <label :class="$style.subLabel">Config (JSON)</label>
           <textarea
             v-model="configJson"
             :class="[$style.dataArea, $style.configArea]"
@@ -360,13 +360,13 @@
 }'
           ></textarea>
 
-          <button :class="$style.primaryBtn" @click="applyConfig">Применить конфиг</button>
+          <button :class="$style.primaryBtn" @click="applyConfig">Apply config</button>
         </aside>
 
         <section :class="$style.rightPanel">
           <div :class="$style.formScroll">
             <p v-if="!jiraScheme.fields.length" :class="$style.empty">
-              Нажмите «Загрузить схему» сверху
+              Click “Load schema” above
             </p>
 
             <div
@@ -389,7 +389,7 @@
               :class="$style.primaryBtn"
               @click="submitTicket"
             >
-              Создать тикет
+              Create issue
             </button>
             <p
               v-if="status.message"

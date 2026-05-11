@@ -18,7 +18,7 @@ function onChange(e: Event) {
             {{ name }}<span class="required" v-if="required">*</span>
         </p>
         <input type="file" multiple @change="onChange" />
-        <p v-if="files.length" class="hint">{{ files.length }} файл(ов)</p>
+        <p v-if="files.length" class="hint">{{ files.length }} file(s)</p>
     </div>
 </template>
 

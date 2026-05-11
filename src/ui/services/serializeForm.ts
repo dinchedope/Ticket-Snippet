@@ -68,8 +68,8 @@ export function serializeForm(
                 out[field.key] = value
                 continue
             }
-            // attachments — отдельным запросом, не в payload
-            // issuelinks — требует linkType, MVP пропускаем
+            // attachments are uploaded in a separate request, not in the payload
+            // issuelinks need a linkType; skipped for the MVP
             continue
         }
 

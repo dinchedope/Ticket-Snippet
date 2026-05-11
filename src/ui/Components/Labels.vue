@@ -26,7 +26,7 @@ const text = computed({
             type="text"
             placeholder="bug, frontend, urgent"
         />
-        <p v-if="value.length" class="hint">{{ value.length }} меток</p>
+        <p v-if="value.length" class="hint">{{ value.length }} label(s)</p>
     </div>
 </template>
 

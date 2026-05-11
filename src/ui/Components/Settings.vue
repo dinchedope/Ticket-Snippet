@@ -29,21 +29,21 @@ function toggleField(key: string) {
 <template>
     <div class="settings">
         <header class="settings-header">
-            <h2>Настройки</h2>
+            <h2>Settings</h2>
             <button class="close-btn" @click="$emit('close')">✕</button>
         </header>
 
         <section>
-            <h3>Подключение</h3>
+            <h3>Connection</h3>
             <input v-model="login" type="text" placeholder="email" />
             <input v-model="token" type="text" placeholder="api token" />
             <input v-model="requestLink" type="text" placeholder="schema URL (createmeta)" />
             <input v-model="baseUrl" type="text" placeholder="baseUrl (https://...)" />
-            <button class="primary" @click="$emit('loadSchema')">Загрузить схему</button>
+            <button class="primary" @click="$emit('loadSchema')">Load schema</button>
         </section>
 
         <section v-if="fields.length">
-            <h3>Видимые поля</h3>
+            <h3>Visible fields</h3>
             <ul class="checklist">
                 <li v-for="field in fields" :key="field.key">
                     <label>
@@ -63,19 +63,19 @@ function toggleField(key: string) {
         </section>
 
         <section>
-            <h3>После создания тикета</h3>
+            <h3>After creating an issue</h3>
             <label class="row">
                 <input type="checkbox" v-model="clearAfterSubmit" />
-                Очищать форму и вставленные данные
+                Clear the form and pasted data
             </label>
         </section>
 
         <details v-if="schemePreview" class="debug">
-            <summary>Схема (debug)</summary>
+            <summary>Schema (debug)</summary>
             <textarea readonly :value="schemePreview" rows="10" class="code"></textarea>
         </details>
 
-        <button class="primary save-btn" @click="$emit('close')">Сохранить и закрыть</button>
+        <button class="primary save-btn" @click="$emit('close')">Save and close</button>
     </div>
 </template>
 
