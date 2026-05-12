@@ -1,3 +1,5 @@
+import type { JiraApiVersion } from './jiraApi'
+
 function isEmpty(v: any): boolean {
     if (v === undefined || v === null) return true
     if (typeof v === 'string') return v.trim() === ''
@@ -6,6 +8,7 @@ function isEmpty(v: any): boolean {
     return false
 }
 
+/** API v3 expects rich-text fields as Atlassian Document Format; v2 takes a plain string. */
 function toAdf(text: string) {
     return {
         type: 'doc',
@@ -19,9 +22,17 @@ function toAdf(text: string) {
     }
 }
 
+/** Rich-text system fields that need ADF on API v3. */
+const RICH_TEXT_SYSTEM_FIELDS = new Set(['description', 'environment'])
+
+function isRichTextField(field: any): boolean {
+    return RICH_TEXT_SYSTEM_FIELDS.has(field.key) || RICH_TEXT_SYSTEM_FIELDS.has(field.schema?.system)
+}
+
 export function serializeForm(
     form: Record<string, any>,
-    fields: any[]
+    fields: any[],
+    apiVersion: JiraApiVersion = 3
 ): Record<string, any> {
     const out: Record<string, any> = {}
 
@@ -33,8 +44,8 @@ export function serializeForm(
         const type = schema?.type
         const items = schema?.items
 
-        if (field.key === 'description' || schema?.system === 'description') {
-            out[field.key] = toAdf(value)
+        if (isRichTextField(field)) {
+            out[field.key] = apiVersion === 2 ? String(value) : toAdf(String(value))
             continue
         }
 

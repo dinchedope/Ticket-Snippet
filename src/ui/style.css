@@ -4,8 +4,75 @@
   font-size: 14px;
 }
 
-body {
+html, body, #app {
+  height: 100%;
   margin: 0;
+  padding: 0;
+}
+
+body {
   background: Canvas;
   color: CanvasText;
+}
+
+/* shared form controls */
+input,
+textarea,
+select {
+  font: inherit;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 14px;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  border-radius: 6px;
+  background: Field;
+  color: FieldText;
+}
+
+input[type="checkbox"] {
+  width: auto;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid AccentColor;
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+/* shared buttons */
+.btn {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, CanvasText 15%, transparent);
+  color: inherit;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  background: AccentColor;
+  color: AccentColorText;
+}
+
+.btn--ghost {
+  background: transparent;
+  border: 1px dashed color-mix(in srgb, CanvasText 30%, transparent);
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }

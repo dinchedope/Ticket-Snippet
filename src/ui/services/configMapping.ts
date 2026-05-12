@@ -24,6 +24,12 @@ export interface ConfigEntry {
 
 export type Config = Record<string, ConfigEntry>
 
+/** One pasted data block: stable `id` (used to build the `internal{id}` name) + raw TSV text. */
+export interface DataBlock {
+    id: number
+    raw: string
+}
+
 /** Map of parsed data blocks: { internal1: { "Entry No.": "...", ... }, internal2: {...} } */
 export type DataMap = Record<string, Record<string, string>>
 
