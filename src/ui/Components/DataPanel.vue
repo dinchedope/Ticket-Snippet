@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
     parseTsvData,
     applyConfigToForm,
@@ -21,12 +21,19 @@ const emit = defineEmits<{
     status: [{ kind: 'ok' | 'error'; message: string }]
 }>()
 
+/** Show parsed-preview boxes and the config textarea. When false, only raw inputs are shown. */
+const showDetails = ref(true)
+
 function blockName(id: number): string {
     return `internal${id}`
 }
 
+/** Picks the smallest positive integer that no existing block uses. Frees deleted ids for reuse. */
 function nextBlockId(): number {
-    return dataBlocks.value.reduce((max, b) => Math.max(max, b.id), 0) + 1
+    const used = new Set(dataBlocks.value.map(b => b.id))
+    let i = 1
+    while (used.has(i)) i++
+    return i
 }
 
 /** Parsed data blocks for the live preview. */
@@ -63,6 +70,16 @@ function applyConfig() {
 
 <template>
     <aside class="left-panel">
+        <div class="panel-head">
+            <button
+                class="toggle-btn"
+                :title="showDetails ? 'Hide preview & config' : 'Show preview & config'"
+                @click="showDetails = !showDetails"
+            >
+                {{ showDetails ? '▾ Details' : '▸ Details' }}
+            </button>
+        </div>
+
         <div class="data-blocks">
             <div v-for="(block, i) in dataBlocks" :key="block.id" class="data-block">
                 <div class="data-block-head">
@@ -80,7 +97,7 @@ function applyConfig() {
                     rows="2"
                     placeholder="paste a data row (TSV: headers + values)"
                 ></textarea>
-                <div class="parsed-box">
+                <div v-if="showDetails" class="parsed-box">
                     <template v-if="Object.keys(parsedBlocks[i].parsed).length">
                         <div
                             v-for="(val, k) in parsedBlocks[i].parsed"
@@ -97,23 +114,17 @@ function applyConfig() {
             <button class="btn btn--ghost add-btn" @click="addDataBlock">+ Add data block</button>
         </div>
 
-        <label class="sub-label">Config (JSON)</label>
-        <textarea
-            v-model="configJson"
-            class="config-area mono"
-            placeholder='{
+        <template v-if="showDetails">
+            <label class="sub-label">Config (JSON)</label>
+            <textarea
+                v-model="configJson"
+                class="config-area mono"
+                placeholder='{
   "summary": { "type": "internal1", "value": "Entry No." },
-  "priority": { "type": "jira", "valueIsId": false, "value": "Medium" },
-  "issuetype": {
-    "type": "jira", "valueIsId": true, "default": "10002",
-    "value": {
-      "source": { "type": "internal1", "value": "Source Type" },
-      "10000": ["Order Picking", "Order Prepicking"],
-      "10001": ["Order Packing"]
-    }
-  }
+  "priority": { "type": "jira", "valueIsId": false, "value": "Medium" }
 }'
-        ></textarea>
+            ></textarea>
+        </template>
 
         <button class="btn btn--primary" @click="applyConfig">Apply config</button>
     </aside>
@@ -125,11 +136,30 @@ function applyConfig() {
     min-width: 280px;
     display: flex;
     flex-direction: column;
-    padding: 12px;
-    gap: 10px;
+    padding: 10px 12px;
+    gap: 8px;
     border-right: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
     flex-shrink: 0;
     overflow-y: auto;
+}
+
+.panel-head {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.toggle-btn {
+    background: transparent;
+    border: 0;
+    color: color-mix(in srgb, CanvasText 75%, transparent);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.toggle-btn:hover {
+    background: color-mix(in srgb, CanvasText 8%, transparent);
 }
 
 .data-blocks {

@@ -10,7 +10,11 @@
   import type { DataBlock } from './services/configMapping'
   import type { JiraCreateMeta } from './services/jiraTypes'
 
-  type Status = { kind: 'idle' | 'ok' | 'error'; message: string };
+  type Status = {
+    kind: 'idle' | 'ok' | 'error';
+    message: string;
+    link?: { url: string; label: string };
+  };
 
   const jiraSchemeString = ref('');
   const jiraScheme = ref<JiraCreateMeta>({ fields: [] });
@@ -96,11 +100,15 @@
     }
   }
 
-  function resetForm() {
+  function resetForm(opts: { keepData?: boolean } = {}) {
     const next: Record<string, any> = {};
     for (const field of jiraScheme.value.fields ?? []) next[field.key] = getInitialValue(field);
     form.value = next;
-    dataBlocks.value = [{ id: 1, raw: '' }];
+    if (!opts.keepData) {
+      // preserve block ids, wipe raw content only
+      const cleared = dataBlocks.value.map(b => ({ ...b, raw: '' }));
+      dataBlocks.value = cleared.length ? cleared : [{ id: 1, raw: '' }];
+    }
   }
 
   async function submitTicket() {
@@ -117,7 +125,12 @@
       const cfg = jiraConfig();
       const payload = serializeForm(form.value, jiraScheme.value.fields, cfg.apiVersion);
       const created = await createIssue(cfg, payload);
-      status.value = { kind: 'ok', message: `Created: ${created.key}` };
+      const browseUrl = `${cfg.baseUrl.replace(/\/$/, '')}/browse/${created.key}`;
+      status.value = {
+        kind: 'ok',
+        message: 'Created:',
+        link: { url: browseUrl, label: created.key },
+      };
       if (clearAfterSubmit.value) resetForm();
     } catch (e: any) {
       status.value = { kind: 'error', message: e?.message ?? String(e) };
@@ -155,7 +168,6 @@
       v-model:requestLink="request_link"
       v-model:baseUrl="baseUrl"
       v-model:visibleFields="visibleFields"
-      v-model:clearAfterSubmit="clearAfterSubmit"
       :fields="jiraScheme.fields"
       :schemePreview="jiraSchemeString"
       @load-schema="loadSchema"
@@ -181,10 +193,12 @@
         />
         <IssueForm
           v-model:form="form"
+          v-model:clearAfterSubmit="clearAfterSubmit"
           :fields="jiraScheme.fields"
           :visibleFields="visibleFields"
           :status="status"
           @submit="submitTicket"
+          @reset="resetForm"
         />
       </div>
     </template>

@@ -50,12 +50,12 @@ function toggle(id: string) {
 .multi-select {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
 }
 
 .title {
     margin: 0;
-    font-size: 0.85rem;
+    font-size: 0.78rem;
     color: inherit;
 }
 
@@ -67,7 +67,7 @@ function toggle(id: string) {
 .options {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
     padding: 4px 8px;
     border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
     border-radius: 6px;

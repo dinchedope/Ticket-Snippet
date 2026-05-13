@@ -4,7 +4,6 @@ const token = defineModel<string>('token')
 const requestLink = defineModel<string>('requestLink')
 const baseUrl = defineModel<string>('baseUrl')
 const visibleFields = defineModel<Record<string, boolean>>('visibleFields')
-const clearAfterSubmit = defineModel<boolean>('clearAfterSubmit')
 
 import type { JiraField } from '../services/jiraTypes'
 
@@ -62,14 +61,6 @@ function toggleField(key: string) {
                     </label>
                 </li>
             </ul>
-        </section>
-
-        <section>
-            <h3>After creating an issue</h3>
-            <label class="row">
-                <input type="checkbox" v-model="clearAfterSubmit" />
-                Clear the form and pasted data
-            </label>
         </section>
 
         <details v-if="schemePreview" class="debug">

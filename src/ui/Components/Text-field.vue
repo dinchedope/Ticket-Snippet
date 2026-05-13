@@ -23,12 +23,12 @@
 .text-field {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
 }
 
 .title {
     margin: 0;
-    font-size: 0.85rem;
+    font-size: 0.78rem;
     color: inherit;
 }
 
@@ -41,7 +41,7 @@ input {
     width: 100%;
     box-sizing: border-box;
     font-size: 14px;
-    padding: 6px 8px;
+    padding: 5px 8px;
     border: 1px solid color-mix(in srgb, CanvasText 30%, transparent);
     border-radius: 6px;
     background: Field;
