@@ -100,7 +100,7 @@
     }
   }
 
-  function resetForm(opts: { keepData?: boolean } = {}) {
+  async function resetForm(opts: { keepData?: boolean } = {}) {
     const next: Record<string, any> = {};
     for (const field of jiraScheme.value.fields ?? []) next[field.key] = getInitialValue(field);
     form.value = next;

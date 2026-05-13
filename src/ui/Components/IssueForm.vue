@@ -94,7 +94,7 @@ const renderedFields = computed(() =>
     display: flex;
     flex-direction: column;
     min-width: 0;
-    width: 500px;
+    max-width: 30%;
 }
 
 .form-scroll {

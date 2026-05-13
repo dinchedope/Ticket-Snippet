@@ -22,7 +22,7 @@ const emit = defineEmits<{
 }>()
 
 /** Show parsed-preview boxes and the config textarea. When false, only raw inputs are shown. */
-const showDetails = ref(true)
+const showDetails = ref(false)
 
 function blockName(id: number): string {
     return `internal${id}`
@@ -132,34 +132,16 @@ function applyConfig() {
 
 <style scoped>
 .left-panel {
+    max-width: 650px;
     width: 40%;
     min-width: 280px;
     display: flex;
     flex-direction: column;
-    padding: 10px 12px;
-    gap: 8px;
+    padding: 12px;
+    gap: 10px;
     border-right: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
     flex-shrink: 0;
     overflow-y: auto;
-}
-
-.panel-head {
-    display: flex;
-    justify-content: flex-end;
-}
-
-.toggle-btn {
-    background: transparent;
-    border: 0;
-    color: color-mix(in srgb, CanvasText 75%, transparent);
-    cursor: pointer;
-    font-size: 0.8rem;
-    padding: 2px 8px;
-    border-radius: 4px;
-}
-
-.toggle-btn:hover {
-    background: color-mix(in srgb, CanvasText 8%, transparent);
 }
 
 .data-blocks {
@@ -209,6 +191,7 @@ function applyConfig() {
     font-size: 12px;
     white-space: pre;
     min-height: 38px;
+    min-height: 100px;
 }
 
 .parsed-box {
