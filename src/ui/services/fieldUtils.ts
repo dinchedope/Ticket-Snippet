@@ -1,4 +1,5 @@
 import type { Component } from 'vue'
+import type { JiraField } from './jiraTypes'
 import TextField from '../Components/Text-field.vue'
 import TextArea from '../Components/Text-area.vue'
 import Select from '../Components/Select.vue'
@@ -8,6 +9,7 @@ import Attachment from '../Components/Attachment.vue'
 import Labels from '../Components/Labels.vue'
 import IssueLink from '../Components/Issue-link.vue'
 import TimeTracking from '../Components/Time-tracking.vue'
+import MultiSelect from '../Components/Multi-select.vue'
 
 export interface FieldUi {
     component: Component
@@ -15,7 +17,7 @@ export interface FieldUi {
 }
 
 /** Maps a Jira create-meta field to the UI component that should render it. */
-export function getUiFieldType(field: any): FieldUi | null {
+export function getUiFieldType(field: JiraField): FieldUi | null {
     const schema = field.schema
     if (!schema) return null
 
@@ -58,6 +60,13 @@ export function getUiFieldType(field: any): FieldUi | null {
     if (schema.type === 'array' && schema.items === 'issuelinks')
         return { component: IssueLink, props: { ...baseProps, multiple: true } }
 
+    if (schema.type === 'array' && (schema.items === 'component' || schema.items === 'option')) {
+        return {
+            component: MultiSelect,
+            props: { ...baseProps, options: field.allowedValues ?? [] },
+        }
+    }
+
     if (schema.type === 'timetracking')
         return { component: TimeTracking, props: baseProps }
 
@@ -65,7 +74,7 @@ export function getUiFieldType(field: any): FieldUi | null {
 }
 
 /** Initial form value for a field: default value, the only allowed value, or an empty placeholder. */
-export function getInitialValue(field: any): any {
+export function getInitialValue(field: JiraField): any {
     if (field.defaultValue !== undefined && field.defaultValue !== null) {
         if (typeof field.defaultValue === 'object') {
             return String(field.defaultValue.id ?? field.defaultValue.value ?? '')

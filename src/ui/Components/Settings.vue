@@ -6,8 +6,10 @@ const baseUrl = defineModel<string>('baseUrl')
 const visibleFields = defineModel<Record<string, boolean>>('visibleFields')
 const clearAfterSubmit = defineModel<boolean>('clearAfterSubmit')
 
+import type { JiraField } from '../services/jiraTypes'
+
 defineProps<{
-    fields: any[]
+    fields: JiraField[]
     schemePreview?: string
 }>()
 

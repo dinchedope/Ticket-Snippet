@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { getUiFieldType } from '../services/fieldUtils'
+import type { JiraField } from '../services/jiraTypes'
 
 const form = defineModel<Record<string, any>>('form', { required: true })
 
 const props = defineProps<{
-    fields: any[]
+    fields: JiraField[]
     visibleFields: Record<string, boolean>
     status: { kind: 'idle' | 'ok' | 'error'; message: string }
 }>()

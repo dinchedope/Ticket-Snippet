@@ -1,3 +1,5 @@
+import type { JiraField, JiraCreateMeta } from './jiraTypes'
+
 export type JiraApiVersion = 2 | 3
 
 export interface JiraConfig {
@@ -30,28 +32,50 @@ function trimSlash(url: string): string {
 }
 
 /**
- * createmeta comes in a few response shapes depending on endpoint / API version.
- * Normalize everything to `{ fields: any[] }` so the rest of the app is version-agnostic.
+ * Brings one raw field object to the unified shape:
+ *  - `key` is always populated (falls back to `fieldId` — some Jira responses ship `fieldId` only)
+ *  - `required` is always boolean, `schema` is always an object
  */
-function normalizeCreateMeta(raw: any): { fields: any[] } {
-    if (!raw || typeof raw !== 'object') return { fields: [] }
-
-    // /rest/api/{2,3}/issue/createmeta/{projectKey}/issuetypes/{issueTypeId}  ->  { fields: [...] }
-    if (Array.isArray(raw.fields)) return { fields: raw.fields }
-
-    // legacy ?expand=projects.issuetypes.fields  ->  { projects: [{ issuetypes: [{ fields: { fieldId: {...} } }] }] }
-    const legacyFields = raw?.projects?.[0]?.issuetypes?.[0]?.fields
-    if (legacyFields && typeof legacyFields === 'object') {
-        return { fields: Object.values(legacyFields) }
+function normalizeField(raw: any): JiraField {
+    const key = raw?.key ?? raw?.fieldId ?? ''
+    return {
+        ...raw,
+        key,
+        fieldId: raw?.fieldId ?? raw?.key,
+        name: raw?.name ?? key,
+        required: !!raw?.required,
+        schema: (raw?.schema && typeof raw.schema === 'object') ? raw.schema : { type: 'unknown' },
     }
-
-    // paginated variant  ->  { values: [...] }
-    if (Array.isArray(raw.values)) return { fields: raw.values }
-
-    return { fields: [] }
 }
 
-export async function fetchCreateMeta(url: string, config: JiraConfig): Promise<{ fields: any[] }> {
+/**
+ * createmeta comes in a few response shapes depending on endpoint / API version.
+ * Normalize everything to `{ fields: JiraField[] }` so the rest of the app is version- and shape-agnostic.
+ */
+export function normalizeCreateMeta(raw: any): JiraCreateMeta {
+    if (!raw || typeof raw !== 'object') return { fields: [] }
+
+    let rawFields: any[] = []
+
+    // /rest/api/{2,3}/issue/createmeta/{projectKey}/issuetypes/{issueTypeId}  ->  { fields: [...] }
+    if (Array.isArray(raw.fields)) {
+        rawFields = raw.fields
+    }
+    // legacy ?expand=projects.issuetypes.fields  ->  { projects: [{ issuetypes: [{ fields: { fieldId: {...} } }] }] }
+    else if (raw?.projects?.[0]?.issuetypes?.[0]?.fields && typeof raw.projects[0].issuetypes[0].fields === 'object') {
+        const legacy = raw.projects[0].issuetypes[0].fields
+        // here the key in the dictionary IS the fieldId — push it onto the object so it survives
+        rawFields = Object.entries<any>(legacy).map(([fieldId, f]) => ({ fieldId, ...f }))
+    }
+    // paginated variant  ->  { values: [...] }
+    else if (Array.isArray(raw.values)) {
+        rawFields = raw.values
+    }
+
+    return { fields: rawFields.map(normalizeField).filter(f => f.key) }
+}
+
+export async function fetchCreateMeta(url: string, config: JiraConfig): Promise<JiraCreateMeta> {
     const res = await fetch(url, { method: 'GET', headers: jsonHeaders(config) })
     if (!res.ok) {
         throw new Error(`Failed to fetch schema: ${res.status} ${res.statusText}`)

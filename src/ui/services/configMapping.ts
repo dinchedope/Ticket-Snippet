@@ -1,3 +1,5 @@
+import type { JiraField, JiraAllowedValue } from './jiraTypes'
+
 export interface ConfigSource {
     /** data block name, e.g. 'internal1' */
     type: string
@@ -53,10 +55,10 @@ export function parseTsvData(text: string): Record<string, string> {
     return result
 }
 
-function findOptionIdByLabel(field: any, label: string): string | null {
+function findOptionIdByLabel(field: JiraField | undefined, label: string): string | null {
     const allowed = field?.allowedValues
     if (!Array.isArray(allowed) || allowed.length === 0) return null
-    const found = allowed.find((opt: any) => opt.value === label || opt.name === label)
+    const found = allowed.find((opt: JiraAllowedValue) => opt.value === label || opt.name === label)
     return found ? String(found.id) : null
 }
 
@@ -71,7 +73,7 @@ function valueIsLabel(entry: ConfigEntry): boolean {
 }
 
 /** Resolves the value for type === 'jira'. Returns null if there is no value. */
-function resolveJiraValue(entry: ConfigEntry, field: any, dataMap: DataMap): string | null {
+function resolveJiraValue(entry: ConfigEntry, field: JiraField | undefined, dataMap: DataMap): string | null {
     let resolved: string | null
 
     if (entry.value && typeof entry.value === 'object') {
@@ -105,9 +107,9 @@ export function applyConfigToForm(
     form: Record<string, any>,
     config: Config,
     dataMap: DataMap,
-    fields: any[]
+    fields: JiraField[]
 ): Record<string, any> {
-    const fieldsByKey: Record<string, any> = {}
+    const fieldsByKey: Record<string, JiraField> = {}
     for (const f of fields) fieldsByKey[f.key] = f
 
     const next = { ...form }

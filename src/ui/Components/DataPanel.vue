@@ -7,13 +7,14 @@ import {
     type DataMap,
     type DataBlock,
 } from '../services/configMapping'
+import type { JiraField } from '../services/jiraTypes'
 
 const dataBlocks = defineModel<DataBlock[]>('dataBlocks', { required: true })
 const configJson = defineModel<string>('configJson', { required: true })
 const form = defineModel<Record<string, any>>('form', { required: true })
 
 const props = defineProps<{
-    fields: any[]
+    fields: JiraField[]
 }>()
 
 const emit = defineEmits<{

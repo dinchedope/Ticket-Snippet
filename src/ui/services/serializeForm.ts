@@ -1,4 +1,5 @@
 import type { JiraApiVersion } from './jiraApi'
+import type { JiraField } from './jiraTypes'
 
 function isEmpty(v: any): boolean {
     if (v === undefined || v === null) return true
@@ -25,13 +26,13 @@ function toAdf(text: string) {
 /** Rich-text system fields that need ADF on API v3. */
 const RICH_TEXT_SYSTEM_FIELDS = new Set(['description', 'environment'])
 
-function isRichTextField(field: any): boolean {
-    return RICH_TEXT_SYSTEM_FIELDS.has(field.key) || RICH_TEXT_SYSTEM_FIELDS.has(field.schema?.system)
+function isRichTextField(field: JiraField): boolean {
+    return RICH_TEXT_SYSTEM_FIELDS.has(field.key) || RICH_TEXT_SYSTEM_FIELDS.has(field.schema?.system ?? '')
 }
 
 export function serializeForm(
     form: Record<string, any>,
-    fields: any[],
+    fields: JiraField[],
     apiVersion: JiraApiVersion = 3
 ): Record<string, any> {
     const out: Record<string, any> = {}
@@ -77,6 +78,10 @@ export function serializeForm(
         if (type === 'array') {
             if (items === 'string') {
                 out[field.key] = value
+                continue
+            }
+            if ((items === 'component' || items === 'option') && Array.isArray(value)) {
+                out[field.key] = value.map((id: string) => ({ id: String(id) }))
                 continue
             }
             // attachments are uploaded in a separate request, not in the payload

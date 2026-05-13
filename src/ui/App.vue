@@ -3,19 +3,17 @@
   import Settings from './Components/Settings.vue'
   import DataPanel from './Components/DataPanel.vue'
   import IssueForm from './Components/IssueForm.vue'
+  // swap between './services/jiraApi' (real Jira) and './services/jiraApiMock' (offline mock)
   import { fetchCreateMeta, createIssue, detectApiVersion, type JiraConfig } from './services/jiraApi'
   import { serializeForm } from './services/serializeForm'
   import { getInitialValue } from './services/fieldUtils'
   import type { DataBlock } from './services/configMapping'
-
-  interface JiraIssue {
-    fields: any[];
-  }
+  import type { JiraCreateMeta } from './services/jiraTypes'
 
   type Status = { kind: 'idle' | 'ok' | 'error'; message: string };
 
   const jiraSchemeString = ref('');
-  const jiraScheme = ref<JiraIssue>({ fields: [] });
+  const jiraScheme = ref<JiraCreateMeta>({ fields: [] });
   const form = ref<Record<string, any>>({});
   const status = ref<Status>({ kind: 'idle', message: '' });
   const settingsOpen = ref(false);
