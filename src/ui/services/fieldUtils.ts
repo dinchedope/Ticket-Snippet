@@ -75,18 +75,26 @@ export function getUiFieldType(field: JiraField): FieldUi | null {
 
 /** Initial form value for a field: default value, the only allowed value, or an empty placeholder. */
 export function getInitialValue(field: JiraField): any {
+    const schemaType = field.schema?.type
+
+    // Array-typed fields (multicheckbox, components multiselect, etc.) ALWAYS start empty.
+    // We intentionally ignore Jira's `defaultValue` and any single-allowedValue auto-select here:
+    //   - multicheckbox controls must default to unchecked
+    //   - MultiSelect expects a real array, never a bare id string
+    //   - empty arrays are skipped by the serializer, so nothing accidentally lands in payload
+    if (schemaType === 'array') return []
+
     if (field.defaultValue !== undefined && field.defaultValue !== null) {
         if (typeof field.defaultValue === 'object') {
             return String(field.defaultValue.id ?? field.defaultValue.value ?? '')
         }
         return field.defaultValue
     }
+    // Auto-select the single allowed value for non-array fields (e.g. Project with one option).
     if (Array.isArray(field.allowedValues) && field.allowedValues.length === 1) {
         const only = field.allowedValues[0]
         return String(only.id ?? only.value ?? '')
     }
-    const schema = field.schema
-    if (schema?.type === 'array') return []
-    if (schema?.type === 'timetracking') return {}
+    if (schemaType === 'timetracking') return {}
     return ''
 }

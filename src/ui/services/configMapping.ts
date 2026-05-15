@@ -7,20 +7,63 @@ export interface ConfigSource {
     value: string
 }
 
+/**
+ * A single boolean check against a value read from a data block.
+ * Exactly one operator key should be set per condition.
+ */
+export interface LeafCondition {
+    source: ConfigSource
+    equals?: string
+    not_equals?: string
+    empty?: boolean
+    not_empty?: boolean
+}
+
+/** AND: every nested condition must be true. */
+export interface AllCondition {
+    all: Condition[]
+}
+
+/** OR: at least one nested condition must be true. */
+export interface AnyCondition {
+    any: Condition[]
+}
+
+export type Condition = LeafCondition | AllCondition | AnyCondition
+
+/** Recursive if/then/else node. Branches can be strings, if-nodes, or cases-nodes. */
+export interface ConditionNode {
+    if: Condition
+    then: ValueExpr
+    else?: ValueExpr
+}
+
+/** One clause inside a `cases` block. `when` supports the same operators / combinators as `if`. */
+export interface CaseClause {
+    when: Condition
+    then: ValueExpr
+}
+
+/** Flat first-match-wins block. `else` runs when no `when` matched. */
+export interface CasesNode {
+    cases: CaseClause[]
+    else?: ValueExpr
+}
+
+/** Anything that can resolve to a string: a literal, an if-tree, or a cases-block. */
+export type ValueExpr = string | ConditionNode | CasesNode
+
 export interface ConfigEntry {
-    /** 'jira' — literal / substitution value; 'internal1' | 'internal2' | ... — data from a data block */
+    /** 'jira' — literal / conditional value; 'internal1' | 'internal2' | ... — data from a data block */
     type: string
     /**
-     * for 'jira': a string (literal) OR a substitution object:
-     *   { source: { type: 'internal1', value: 'Source Type' },
-     *     '10000': ['Order Picking', 'Order Prepicking'],
-     *     '10001': ['Order Packing'] }
-     * for 'internalN': the column name in the TSV
+     * for 'jira': a string literal OR a ValueExpr tree (if/then/else, cases, or nested mix).
+     * for 'internalN': the column name in the TSV.
      */
-    value: string | Record<string, any>
+    value: ValueExpr
     /** whether `value` is treated as an option id (true, default) or as its label (false) */
     valueIsId?: boolean | string
-    /** default id used when substitution finds no match; false/absent — no default */
+    /** fallback id used when the value expression returns nothing; false/absent — no default */
     default?: string | false
 }
 
@@ -72,27 +115,58 @@ function valueIsLabel(entry: ConfigEntry): boolean {
     return entry.valueIsId === false || entry.valueIsId === 'false'
 }
 
+function isConditionNode(v: any): v is ConditionNode {
+    return v && typeof v === 'object' && 'if' in v && v.if && typeof v.if === 'object'
+}
+
+function isCasesNode(v: any): v is CasesNode {
+    return v && typeof v === 'object' && Array.isArray((v as any).cases)
+}
+
+/** Evaluates a Condition (leaf, all, or any) against the data map. */
+function evalCondition(cond: any, dataMap: DataMap): boolean {
+    if (!cond || typeof cond !== 'object') return false
+    if (Array.isArray(cond.all)) return cond.all.every((c: any) => evalCondition(c, dataMap))
+    if (Array.isArray(cond.any)) return cond.any.some((c: any) => evalCondition(c, dataMap))
+
+    const actual = readSource(cond.source, dataMap)
+    if (typeof cond.equals === 'string') return actual === cond.equals
+    if (typeof cond.not_equals === 'string') return actual !== cond.not_equals
+    if (cond.empty === true) return actual === ''
+    if (cond.not_empty === true) return actual !== ''
+    return false
+}
+
+/** Walks a ValueExpr (string / if-tree / cases). Missing branches yield null. */
+function evalValueExpr(node: ValueExpr | undefined, dataMap: DataMap): string | null {
+    if (node == null) return null
+    if (typeof node === 'string') return node
+    if (isConditionNode(node)) {
+        const branch = evalCondition(node.if, dataMap) ? node.then : node.else
+        return evalValueExpr(branch, dataMap)
+    }
+    if (isCasesNode(node)) {
+        for (const c of node.cases) {
+            if (c && evalCondition(c.when, dataMap)) return evalValueExpr(c.then, dataMap)
+        }
+        return evalValueExpr(node.else, dataMap)
+    }
+    return null
+}
+
 /** Resolves the value for type === 'jira'. Returns null if there is no value. */
 function resolveJiraValue(entry: ConfigEntry, field: JiraField | undefined, dataMap: DataMap): string | null {
     let resolved: string | null
 
-    if (entry.value && typeof entry.value === 'object') {
-        // substitution mode: find the id key whose array contains the source value
-        const sourceVal = readSource(entry.value.source, dataMap)
-        resolved = null
-        for (const [key, candidates] of Object.entries(entry.value)) {
-            if (key === 'source') continue
-            if (Array.isArray(candidates) && candidates.includes(sourceVal)) {
-                resolved = key
-                break
-            }
-        }
+    if (isConditionNode(entry.value) || isCasesNode(entry.value)) {
+        resolved = evalValueExpr(entry.value, dataMap)
         if (resolved === null) {
             resolved = typeof entry.default === 'string' && entry.default.length ? entry.default : null
         }
+    } else if (typeof entry.value === 'string') {
+        resolved = entry.value.length ? entry.value : null
     } else {
-        // literal mode
-        resolved = entry.value != null ? String(entry.value) : null
+        resolved = null
     }
 
     if (resolved !== null && valueIsLabel(entry)) {

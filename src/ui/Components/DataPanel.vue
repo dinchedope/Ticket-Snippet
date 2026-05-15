@@ -121,7 +121,20 @@ function applyConfig() {
                 class="config-area mono"
                 placeholder='{
   "summary": { "type": "internal1", "value": "Entry No." },
-  "priority": { "type": "jira", "valueIsId": false, "value": "Medium" }
+  "priority": { "type": "jira", "valueIsId": false, "value": "Medium" },
+  "customfield_12800": {
+    "type": "jira",
+    "valueIsId": true,
+    "default": "11405",
+    "value": {
+      "if": {
+        "source": { "type": "internal2", "value": "Sell-to Customer Group" },
+        "equals": "FRONTROW"
+      },
+      "then": "11404",
+      "else": "11405"
+    }
+  }
 }'
             ></textarea>
         </template>

@@ -4,7 +4,7 @@
   import DataPanel from './Components/DataPanel.vue'
   import IssueForm from './Components/IssueForm.vue'
   // swap between './services/jiraApi' (real Jira) and './services/jiraApiMock' (offline mock)
-  import { fetchCreateMeta, createIssue, detectApiVersion, type JiraConfig } from './services/jiraApi'
+  import { fetchCreateMeta, createIssue, detectApiVersion, type JiraConfig } from './services/jiraApiMock'
   import { serializeForm } from './services/serializeForm'
   import { getInitialValue } from './services/fieldUtils'
   import type { DataBlock } from './services/configMapping'
@@ -54,6 +54,7 @@
   const dataBlocks = persisted<DataBlock[]>('dataBlocks', [{ id: 1, raw: '' }]);
   const configJson = persisted('configJson', '');
   const visibleFields = persisted<Record<string, boolean>>('visibleFields', {});
+  const fieldOrder = persisted<string[]>('fieldOrder', []);
   const clearAfterSubmit = persisted('clearAfterSubmit', false);
 
   // --- Jira API orchestration ------------------------------------------------
@@ -88,12 +89,20 @@
 
       const nextForm: Record<string, any> = {};
       const nextVisibility: Record<string, boolean> = { ...(visibleFields.value ?? {}) };
+      const validKeys = new Set<string>();
       for (const field of data.fields ?? []) {
         nextForm[field.key] = getInitialValue(field);
         if (nextVisibility[field.key] === undefined) nextVisibility[field.key] = true;
+        validKeys.add(field.key);
+      }
+      // keep user's ordering, drop dead keys, append new fields at the end
+      const nextOrder = (fieldOrder.value ?? []).filter(k => validKeys.has(k));
+      for (const field of data.fields ?? []) {
+        if (!nextOrder.includes(field.key)) nextOrder.push(field.key);
       }
       form.value = nextForm;
       visibleFields.value = nextVisibility;
+      fieldOrder.value = nextOrder;
       status.value = { kind: 'ok', message: 'Schema loaded' };
     } catch (e: any) {
       status.value = { kind: 'error', message: e?.message ?? String(e) };
@@ -146,7 +155,7 @@
   onMounted(async () => {
     const data = await chrome.storage.local.get([
       'login', 'token', 'request_link', 'baseUrl',
-      'dataBlocks', 'configJson', 'visibleFields', 'clearAfterSubmit'
+      'dataBlocks', 'configJson', 'visibleFields', 'fieldOrder', 'clearAfterSubmit'
     ]);
     login.value = data.login || '';
     token.value = data.token || '';
@@ -155,6 +164,7 @@
     dataBlocks.value = normalizeBlocks(data.dataBlocks);
     configJson.value = data.configJson || '';
     visibleFields.value = data.visibleFields || {};
+    fieldOrder.value = Array.isArray(data.fieldOrder) ? data.fieldOrder : [];
     clearAfterSubmit.value = !!data.clearAfterSubmit;
   });
 </script>
@@ -168,6 +178,7 @@
       v-model:requestLink="request_link"
       v-model:baseUrl="baseUrl"
       v-model:visibleFields="visibleFields"
+      v-model:fieldOrder="fieldOrder"
       :fields="jiraScheme.fields"
       :schemePreview="jiraSchemeString"
       @load-schema="loadSchema"
@@ -194,6 +205,7 @@
         <IssueForm
           v-model:form="form"
           v-model:clearAfterSubmit="clearAfterSubmit"
+          v-model:fieldOrder="fieldOrder"
           :fields="jiraScheme.fields"
           :visibleFields="visibleFields"
           :status="status"

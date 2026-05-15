@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { getUiFieldType } from '../services/fieldUtils'
 import type { JiraField } from '../services/jiraTypes'
 
 const form = defineModel<Record<string, any>>('form', { required: true })
 const clearAfterSubmit = defineModel<boolean>('clearAfterSubmit', { default: false })
+const fieldOrder = defineModel<string[]>('fieldOrder', { default: () => [] })
 
 const props = defineProps<{
     fields: JiraField[]
@@ -21,12 +22,78 @@ defineEmits<{
     reset: []
 }>()
 
-const renderedFields = computed(() =>
-    (props.fields ?? [])
+const renderedFields = computed(() => {
+    // sort fields by user-defined order; fields missing from `fieldOrder` go to the end in schema order
+    const byKey = new Map(props.fields.map(f => [f.key, f]))
+    const ordered: JiraField[] = []
+    for (const key of fieldOrder.value ?? []) {
+        const f = byKey.get(key)
+        if (f) {
+            ordered.push(f)
+            byKey.delete(key)
+        }
+    }
+    for (const f of byKey.values()) ordered.push(f)
+
+    return ordered
         .filter(field => props.visibleFields?.[field.key] !== false)
         .map(field => ({ field, ui: getUiFieldType(field) }))
         .filter(item => item.ui !== null)
-)
+})
+
+// --- drag & drop -----------------------------------------------------------
+// Indexes here refer to positions in `renderedFields` (only visible fields).
+// We translate to positions in `fieldOrder` (which contains ALL keys) on drop,
+// so hidden fields keep their relative positions undisturbed.
+const draggedIdx = ref<number | null>(null)
+const dragOverIdx = ref<number | null>(null)
+
+function onDragStart(idx: number, e: DragEvent) {
+    draggedIdx.value = idx
+    if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move'
+        // Firefox needs *something* on dataTransfer to begin the drag
+        e.dataTransfer.setData('text/plain', String(idx))
+    }
+}
+
+function onDragOver(idx: number, e: DragEvent) {
+    if (draggedIdx.value === null) return
+    e.preventDefault() // required to make the row a valid drop target
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+    dragOverIdx.value = idx
+}
+
+function onDrop(targetIdx: number) {
+    const from = draggedIdx.value
+    if (from === null || from === targetIdx) {
+        onDragEnd()
+        return
+    }
+    const rendered = renderedFields.value
+    const fromKey = rendered[from]?.field.key
+    const toKey = rendered[targetIdx]?.field.key
+    if (!fromKey || !toKey) { onDragEnd(); return }
+
+    const order = [...(fieldOrder.value ?? [])]
+    const fromOrderIdx = order.indexOf(fromKey)
+    if (fromOrderIdx < 0) { onDragEnd(); return }
+
+    order.splice(fromOrderIdx, 1)
+    const toOrderIdx = order.indexOf(toKey)
+    if (toOrderIdx >= 0) {
+        order.splice(toOrderIdx, 0, fromKey)
+    } else {
+        order.push(fromKey)
+    }
+    fieldOrder.value = order
+    onDragEnd()
+}
+
+function onDragEnd() {
+    draggedIdx.value = null
+    dragOverIdx.value = null
+}
 </script>
 
 <template>
@@ -35,11 +102,27 @@ const renderedFields = computed(() =>
             <p v-if="!fields.length" class="empty">Click “Load schema” above</p>
 
             <div
-                v-for="{ field, ui } in renderedFields"
+                v-for="({ field, ui }, idx) in renderedFields"
                 :key="field.key"
                 class="field-row"
+                :class="{
+                    'is-dragging': draggedIdx === idx,
+                    'is-over': dragOverIdx === idx && draggedIdx !== idx,
+                }"
+                @dragover="onDragOver(idx, $event)"
+                @drop="onDrop(idx)"
+                @dragend="onDragEnd"
             >
-                <span class="field-key mono">{{ field.key }}</span>
+                <div class="field-head">
+                    <span
+                        class="drag-handle"
+                        draggable="true"
+                        title="Drag to reorder"
+                        @dragstart="onDragStart(idx, $event)"
+                        @dragend="onDragEnd"
+                    >⋮⋮</span>
+                    <span class="field-key mono">{{ field.key }}</span>
+                </div>
                 <component
                     :is="ui!.component"
                     v-bind="ui!.props"
@@ -123,11 +206,46 @@ const renderedFields = computed(() =>
     background: color-mix(in srgb, AccentColor 6%, transparent);
 }
 
+.field-row.is-dragging {
+    opacity: 0.4;
+}
+
+.field-row.is-over {
+    background: color-mix(in srgb, AccentColor 12%, transparent);
+    box-shadow: inset 0 2px 0 0 AccentColor;
+}
+
+.field-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 1px;
+}
+
+.drag-handle {
+    cursor: grab;
+    user-select: none;
+    color: color-mix(in srgb, CanvasText 35%, transparent);
+    font-size: 0.8rem;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: background 120ms, color 120ms;
+}
+
+.drag-handle:hover {
+    background: color-mix(in srgb, CanvasText 10%, transparent);
+    color: color-mix(in srgb, CanvasText 70%, transparent);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
 .field-key {
     font-size: 0.68rem;
     line-height: 1.2;
     color: color-mix(in srgb, CanvasText 45%, transparent);
-    margin-bottom: 1px;
 }
 
 .empty {

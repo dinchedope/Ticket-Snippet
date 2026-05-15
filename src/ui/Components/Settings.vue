@@ -1,13 +1,15 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
+import type { JiraField } from '../services/jiraTypes'
+
 const login = defineModel<string>('login')
 const token = defineModel<string>('token')
 const requestLink = defineModel<string>('requestLink')
 const baseUrl = defineModel<string>('baseUrl')
 const visibleFields = defineModel<Record<string, boolean>>('visibleFields')
+const fieldOrder = defineModel<string[]>('fieldOrder')
 
-import type { JiraField } from '../services/jiraTypes'
-
-defineProps<{
+const props = defineProps<{
     fields: JiraField[]
     schemePreview?: string
 }>()
@@ -24,6 +26,58 @@ function isFieldVisible(key: string): boolean {
 function toggleField(key: string) {
     const current = visibleFields.value ?? {}
     visibleFields.value = { ...current, [key]: !isFieldVisible(key) }
+}
+
+// Fields in their user-defined order; anything missing from fieldOrder is appended in schema order.
+const orderedFields = computed<JiraField[]>(() => {
+    const byKey = new Map(props.fields.map(f => [f.key, f]))
+    const out: JiraField[] = []
+    for (const key of fieldOrder.value ?? []) {
+        const f = byKey.get(key)
+        if (f) {
+            out.push(f)
+            byKey.delete(key)
+        }
+    }
+    for (const f of byKey.values()) out.push(f)
+    return out
+})
+
+// --- drag & drop ---------------------------------------------------------
+const draggedIdx = ref<number | null>(null)
+const dragOverIdx = ref<number | null>(null)
+
+function onDragStart(idx: number, e: DragEvent) {
+    draggedIdx.value = idx
+    if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move'
+        // some browsers need *something* set for drag to start
+        e.dataTransfer.setData('text/plain', String(idx))
+    }
+}
+
+function onDragOver(idx: number, e: DragEvent) {
+    e.preventDefault()
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+    dragOverIdx.value = idx
+}
+
+function onDrop(targetIdx: number) {
+    const from = draggedIdx.value
+    if (from === null || from === targetIdx) {
+        onDragEnd()
+        return
+    }
+    const keys = orderedFields.value.map(f => f.key)
+    const [moved] = keys.splice(from, 1)
+    keys.splice(targetIdx, 0, moved)
+    fieldOrder.value = keys
+    onDragEnd()
+}
+
+function onDragEnd() {
+    draggedIdx.value = null
+    dragOverIdx.value = null
 }
 </script>
 
@@ -44,9 +98,23 @@ function toggleField(key: string) {
         </section>
 
         <section v-if="fields.length">
-            <h3>Visible fields</h3>
+            <h3>Fields</h3>
+            <p class="hint">Drag rows to reorder. The checkbox toggles visibility on the main screen.</p>
             <ul class="checklist">
-                <li v-for="field in fields" :key="field.key">
+                <li
+                    v-for="(field, idx) in orderedFields"
+                    :key="field.key"
+                    draggable="true"
+                    :class="{
+                        'is-dragging': draggedIdx === idx,
+                        'is-over': dragOverIdx === idx && draggedIdx !== idx,
+                    }"
+                    @dragstart="onDragStart(idx, $event)"
+                    @dragover="onDragOver(idx, $event)"
+                    @drop="onDrop(idx)"
+                    @dragend="onDragEnd"
+                >
+                    <span class="handle" title="Drag to reorder">⋮⋮</span>
                     <label>
                         <input
                             type="checkbox"
@@ -155,7 +223,45 @@ input, textarea {
     padding: 8px;
 }
 
+.checklist li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: background 120ms;
+}
+
+.checklist li.is-dragging {
+    opacity: 0.4;
+}
+
+.checklist li.is-over {
+    background: color-mix(in srgb, AccentColor 18%, transparent);
+    box-shadow: inset 0 2px 0 0 AccentColor;
+}
+
+.checklist .handle {
+    cursor: grab;
+    user-select: none;
+    color: color-mix(in srgb, CanvasText 50%, transparent);
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 2px 4px;
+}
+
+.checklist .handle:active {
+    cursor: grabbing;
+}
+
+.hint {
+    margin: 0;
+    font-size: 0.78rem;
+    color: color-mix(in srgb, CanvasText 60%, transparent);
+}
+
 .checklist label {
+    flex: 1;
     display: flex;
     align-items: center;
     gap: 8px;

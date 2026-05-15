@@ -200,36 +200,215 @@ The config is a JSON object: **key = Jira field key**, value = a `ConfigEntry`.
   // 2) a literal value; valueIsId:false means "this is the option's label, look up its id"
   "priority":    { "type": "jira", "valueIsId": false, "value": "Medium" },
 
-  // 3) substitution: choose an id based on a value read from a data block
+  // 3) conditional: pick an id by checking values read from data blocks
   "issuetype": {
     "type": "jira",
     "valueIsId": true,
     "default": "10002",
     "value": {
-      "source": { "type": "internal1", "value": "Source Type" },
-      "10000": ["Order Picking", "Order Prepicking"],
-      "10001": ["Order Packing"]
+      "if": {
+        "source": { "type": "internal1", "value": "Source Type" },
+        "equals": "Order Picking"
+      },
+      "then": "10000",
+      "else": "10001"
     }
   }
 }
 ```
 
-`ConfigEntry` fields:
+### `ConfigEntry` fields
 
 | field | meaning |
 |---|---|
-| `type` | `"internal{N}"` — take the value from data block `internal{N}`; `"jira"` — a literal / substitution value |
-| `value` | for `internal{N}`: the TSV column name. For `jira`: a string (literal) **or** a substitution object (see below) |
-| `valueIsId` | `true` (default) — `value` is already the option id. `false` — `value` is the option's label; the id is looked up in the field's `allowedValues`. (Strings `"true"`/`"false"` are tolerated too.) |
-| `default` | substitution only: the id to use when nothing matches. `false`/absent → no value (`""`). |
+| `type` | `"internal{N}"` — take the value from data block `internal{N}`; `"jira"` — a literal / conditional value |
+| `value` | for `internal{N}`: the TSV column name. For `jira`: a string (literal) **or** a `ValueExpr` tree (see below) |
+| `valueIsId` | `true` (default) — `value` resolves to an option id. `false` — it resolves to the option's label and the id is looked up in the field's `allowedValues`. (Strings `"true"`/`"false"` are tolerated too.) |
+| `default` | conditional only: the id to fall back to when the expression returns nothing. `false`/absent → no value (`""`). |
 
-**Substitution mode** (`value` is an object): read `value.source` → `dataMap[source.type][source.value]`,
-then find the id key whose array contains that value. The `source` key is reserved and is
-not treated as an id. No match → `default`. Then, if `valueIsId: false`, the chosen key is
-additionally resolved label → id.
+### `ValueExpr` — the conditional value tree
 
-So in the example: if `internal1["Source Type"] == "Order Picking"`, then
-`form.issuetype = "10000"` and the Select shows `Task (10000)`.
+A `ValueExpr` is one of:
+
+1. **String literal** — final value (an option id, or a label if `valueIsId: false`).
+2. **`{ if, then, else? }`** — evaluate `if`. If true → recurse into `then`; otherwise → recurse into `else`.
+3. **`{ cases: [...], else? }`** — try each clause's `when` in order; the first match wins.
+
+Branches (`then`, `else`) are themselves `ValueExpr`s, so anything can nest into anything.
+
+#### `Condition` — what goes in `if` / `when`
+
+A condition is either a **leaf check** or a **combinator**.
+
+**Leaf** — read a value from a data block and compare. Exactly one operator key:
+
+```jsonc
+{
+  "source": { "type": "internal2", "value": "Customer Group" },
+  // exactly one of:
+  "equals":     "FRONTROW",
+  "not_equals": "FRONTROW",
+  "empty":      true,
+  "not_empty":  true
+}
+```
+
+- `source.type` — name of a data block (`internal1`, `internal2`, …).
+- `source.value` — column name inside that block's TSV.
+- `equals` / `not_equals` — strict string compare against the read value.
+- `empty` / `not_empty` — `true` to enable; missing columns count as empty.
+
+**Combinators** — nest other conditions:
+
+```jsonc
+{ "all": [ <condition>, <condition>, ... ] }   // AND — all must be true
+{ "any": [ <condition>, <condition>, ... ] }   // OR  — at least one
+```
+
+`all` and `any` can contain leaves, other `all`/`any`, or any mix.
+
+### `cases` — flat first-match-wins
+
+`cases` is a flatter alternative to nested `else if`. Each clause is `{ when, then }`; the
+first `when` that evaluates to true wins. If nothing matches, `else` is used (or `default`).
+
+```jsonc
+"value": {
+  "cases": [
+    { "when": { "source": { "type": "internal2", "value": "Group" }, "equals": "FRONTROW" },  "then": "11404" },
+    { "when": { "source": { "type": "internal2", "value": "Group" }, "equals": "VIP" },       "then": "11406" },
+    {
+      "when": {
+        "all": [
+          { "source": { "type": "internal1", "value": "Type" },   "equals":    "Standard" },
+          { "source": { "type": "internal1", "value": "Region" }, "not_empty": true }
+        ]
+      },
+      "then": "11405"
+    }
+  ],
+  "else": "11407"
+}
+```
+
+`when` accepts the exact same shape as `if` (leaves + `all`/`any`).
+
+### Fallback order
+
+For a `jira` entry, the chosen value is determined by:
+
+1. Walk the `ValueExpr`. The first reached **string** wins.
+2. If no clause matched and no `else` was provided → use `entry.default` (if it's a non-empty string).
+3. Otherwise → empty (`""`).
+
+Then, if `valueIsId: false`, the string is looked up as a label in the field's `allowedValues` and replaced with the matching id.
+
+### Examples
+
+**Literal**
+
+```json
+"priority": { "type": "jira", "valueIsId": false, "value": "Medium" }
+```
+
+**Simple if/else**
+
+```json
+"customfield_12800": {
+  "type": "jira",
+  "valueIsId": true,
+  "default": "11405",
+  "value": {
+    "if": {
+      "source": { "type": "internal2", "value": "Sell-to Customer Group" },
+      "equals": "FRONTROW"
+    },
+    "then": "11404",
+    "else": "11405"
+  }
+}
+```
+
+**AND across two blocks**
+
+```json
+"value": {
+  "if": {
+    "all": [
+      { "source": { "type": "internal2", "value": "Customer Group" }, "equals": "FRONTROW" },
+      { "source": { "type": "internal1", "value": "Region" },         "equals": "EU" }
+    ]
+  },
+  "then": "11404",
+  "else": "11405"
+}
+```
+
+**OR with a list of acceptable values**
+
+```json
+"value": {
+  "if": {
+    "any": [
+      { "source": { "type": "internal2", "value": "Type" }, "equals": "STANDARD_HPBIN1" },
+      { "source": { "type": "internal2", "value": "Type" }, "equals": "STANDARD_HPBIN2" },
+      { "source": { "type": "internal2", "value": "Type" }, "equals": "STANDARD" }
+    ]
+  },
+  "then": "11405",
+  "else": "11404"
+}
+```
+
+**Nested else-if chain**
+
+```json
+"value": {
+  "if":   { "source": { "type": "internal2", "value": "Group" }, "equals": "FRONTROW" },
+  "then": "11404",
+  "else": {
+    "if":   { "source": { "type": "internal2", "value": "Group" }, "equals": "VIP" },
+    "then": "11406",
+    "else": {
+      "if":   { "source": { "type": "internal1", "value": "Type" }, "equals": "Standard" },
+      "then": "11405",
+      "else": "11407"
+    }
+  }
+}
+```
+
+**Same logic, flat, via `cases`**
+
+```json
+"value": {
+  "cases": [
+    { "when": { "source": { "type": "internal2", "value": "Group" }, "equals": "FRONTROW" }, "then": "11404" },
+    { "when": { "source": { "type": "internal2", "value": "Group" }, "equals": "VIP" },      "then": "11406" },
+    { "when": { "source": { "type": "internal1", "value": "Type" },  "equals": "Standard" }, "then": "11405" }
+  ],
+  "else": "11407"
+}
+```
+
+**Mixed — `cases` whose `then` is itself an `if`**
+
+```json
+"value": {
+  "cases": [
+    {
+      "when": { "source": { "type": "internal2", "value": "Group" }, "equals": "FRONTROW" },
+      "then": {
+        "if":   { "source": { "type": "internal1", "value": "Region" }, "equals": "EU" },
+        "then": "11410",
+        "else": "11411"
+      }
+    },
+    { "when": { "source": { "type": "internal2", "value": "Group" }, "equals": "VIP" }, "then": "11406" }
+  ],
+  "else": "11405"
+}
+```
 
 ---
 
