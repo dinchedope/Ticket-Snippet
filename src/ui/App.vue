@@ -4,7 +4,7 @@
   import DataPanel from './Components/DataPanel.vue'
   import IssueForm from './Components/IssueForm.vue'
   // swap between './services/jiraApi' (real Jira) and './services/jiraApiMock' (offline mock)
-  import { fetchCreateMeta, createIssue, detectApiVersion, type JiraConfig } from './services/jiraApiMock'
+  import { fetchCreateMeta, createIssue, detectApiVersion, type JiraConfig } from './services/jiraApi'
   import { serializeForm } from './services/serializeForm'
   import { getInitialValue } from './services/fieldUtils'
   import type { DataBlock } from './services/configMapping'
