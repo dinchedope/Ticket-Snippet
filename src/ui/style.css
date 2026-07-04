@@ -9,3 +9,59 @@ body {
   background: Canvas;
   color: CanvasText;
 }
+
+/* ── Общие примитивы, используемые всеми страницами ───────────── */
+
+/* Кнопки */
+.btn {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, CanvasText 15%, transparent);
+  color: inherit;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: AccentColor;
+  color: AccentColorText;
+}
+.btn-ghost {
+  background: transparent;
+  padding: 4px 8px;
+}
+.btn-ghost:hover {
+  background: color-mix(in srgb, CanvasText 10%, transparent);
+}
+
+/* Статус последней операции */
+.status {
+  margin: 0;
+  font-size: 0.85rem;
+  color: color-mix(in srgb, CanvasText 70%, transparent);
+  min-width: 0;
+  word-break: break-word;
+}
+.status-ok {
+  color: #2a9d2a;
+}
+.status-error {
+  color: #d33;
+}
+
+/* Единый стиль фокуса для всех полей ввода */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid AccentColor;
+  outline-offset: 1px;
+  border-color: transparent;
+}
