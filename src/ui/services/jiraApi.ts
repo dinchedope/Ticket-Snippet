@@ -1,4 +1,7 @@
 import { textToAdf } from './adf'
+import type { JiraField, JiraCreateMeta } from './jiraTypes'
+
+export type JiraApiVersion = 2 | 3
 
 export interface JiraConfig {
     baseUrl: string

@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import { persisted } from './persisted'
 import { getInitialValue } from './schemaUtils'
-import { fetchCreateMeta, createIssue, type JiraConfig } from '../services/jiraApi'
+import { fetchCreateMeta, createIssue, detectApiVersion, type JiraConfig } from '../services/jiraApi'
 import { serializeForm } from '../services/serializeForm'
 import {
   parseTsvData,
@@ -111,7 +111,12 @@ function buildDataMap(): DataMap {
 
 /** Текущие креды подключения в формате сервиса jiraApi. */
 function jiraConfig(): JiraConfig {
-  return { baseUrl: baseUrl.value, email: login.value, apiToken: token.value }
+  return {
+    baseUrl: baseUrl.value,
+    email: login.value,
+    apiToken: token.value,
+    apiVersion: detectApiVersion(request_link.value),
+  }
 }
 
 /** Проверяет, что все поля подключения заполнены. Возвращает текст ошибки или null. */
