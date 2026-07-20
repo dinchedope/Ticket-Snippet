@@ -98,8 +98,7 @@ function onDragEnd() {
         </section>
 
         <section v-if="fields.length">
-            <h3>Fields</h3>
-            <p class="hint">Drag rows to reorder. The checkbox toggles visibility on the main screen.</p>
+            <h3>Visible fields</h3>
             <ul class="checklist">
                 <li
                     v-for="(field, idx) in orderedFields"
@@ -129,6 +128,14 @@ function onDragEnd() {
                     </label>
                 </li>
             </ul>
+        </section>
+
+        <section>
+            <h3>After creating an issue</h3>
+            <label class="row">
+                <input type="checkbox" v-model="clearAfterSubmit" />
+                Clear the form and pasted data
+            </label>
         </section>
 
         <details v-if="schemePreview" class="debug">

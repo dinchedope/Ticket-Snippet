@@ -15,34 +15,9 @@ body {
   color: CanvasText;
 }
 
-/* shared form controls */
-input,
-textarea,
-select {
-  font: inherit;
-  box-sizing: border-box;
-  width: 100%;
-  padding: 6px 8px;
-  font-size: 14px;
-  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
-  border-radius: 6px;
-  background: Field;
-  color: FieldText;
-}
+/* ── Общие примитивы, используемые всеми страницами ───────────── */
 
-input[type="checkbox"] {
-  width: auto;
-}
-
-input:focus,
-textarea:focus,
-select:focus {
-  outline: 2px solid AccentColor;
-  outline-offset: 1px;
-  border-color: transparent;
-}
-
-/* shared buttons */
+/* Кнопки */
 .btn {
   font: inherit;
   font-size: 0.9rem;
@@ -53,26 +28,45 @@ select:focus {
   color: inherit;
   cursor: pointer;
 }
-
 .btn:hover:not(:disabled) {
   filter: brightness(1.05);
 }
-
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
-
-.btn--primary {
+.btn-primary {
   background: AccentColor;
   color: AccentColorText;
 }
-
-.btn--ghost {
+.btn-ghost {
   background: transparent;
-  border: 1px dashed color-mix(in srgb, CanvasText 30%, transparent);
+  padding: 4px 8px;
+}
+.btn-ghost:hover {
+  background: color-mix(in srgb, CanvasText 10%, transparent);
 }
 
-.mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+/* Статус последней операции */
+.status {
+  margin: 0;
+  font-size: 0.85rem;
+  color: color-mix(in srgb, CanvasText 70%, transparent);
+  min-width: 0;
+  word-break: break-word;
+}
+.status-ok {
+  color: #2a9d2a;
+}
+.status-error {
+  color: #d33;
+}
+
+/* Единый стиль фокуса для всех полей ввода */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid AccentColor;
+  outline-offset: 1px;
+  border-color: transparent;
 }
