@@ -258,6 +258,7 @@ export function useAppStore() {
     status,
     // хелперы
     blockName,
+    jiraConfig,
     // действия
     addDataBlock,
     removeDataBlock,

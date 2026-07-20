@@ -1,22 +1,11 @@
+import { textToAdf } from './adf'
+
 function isEmpty(v: any): boolean {
     if (v === undefined || v === null) return true
     if (typeof v === 'string') return v.trim() === ''
     if (Array.isArray(v)) return v.length === 0
     if (typeof v === 'object') return Object.keys(v).length === 0
     return false
-}
-
-function toAdf(text: string) {
-    return {
-        type: 'doc',
-        version: 1,
-        content: [
-            {
-                type: 'paragraph',
-                content: [{ type: 'text', text }],
-            },
-        ],
-    }
 }
 
 export function serializeForm(
@@ -34,7 +23,7 @@ export function serializeForm(
         const items = schema?.items
 
         if (field.key === 'description' || schema?.system === 'description') {
-            out[field.key] = toAdf(value)
+            out[field.key] = textToAdf(value)
             continue
         }
 

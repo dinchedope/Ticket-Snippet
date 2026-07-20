@@ -4,9 +4,10 @@
   import { getUiFieldType } from './fieldRegistry'
   import ConfigPanel from './ConfigPanel.vue'
 
-  /** Переход на страницу настроек обрабатывает App.vue. */
+  /** Переходы на другие страницы обрабатывает App.vue. */
   defineEmits<{
     openSettings: []
+    openIssue: []
   }>()
 
   const store = useAppStore()
@@ -29,6 +30,7 @@
       <h1 :class="$style.title">Создать тикет в Jira</h1>
       <div :class="$style.actions">
         <button class="btn btn-primary" @click="store.loadSchema">Загрузить схему</button>
+        <button class="btn btn-ghost" @click="$emit('openIssue')">Открыть тикет</button>
         <button class="btn btn-ghost" @click="$emit('openSettings')" title="Настройки">⚙</button>
       </div>
     </header>
