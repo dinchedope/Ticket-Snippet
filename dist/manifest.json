@@ -23,11 +23,20 @@
   ],
   "web_accessible_resources": [
     {
+      "resources": [
+        "index.html"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    },
+    {
       "matches": [
         "<all_urls>"
       ],
       "resources": [
-        "index.html"
+        "**/*",
+        "*"
       ],
       "use_dynamic_url": false
     }
